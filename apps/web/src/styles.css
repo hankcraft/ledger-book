@@ -1,0 +1,43 @@
+:root {
+  --accent: #a63422;
+  --benchmark: #8d9892;
+  --canvas: #f4f1eb;
+  --danger: #a63422;
+  --ink: #1f2523;
+  --ink-hover: #37423e;
+  --line: #d6d0c5;
+  --muted: #67706b;
+  --negative: #23715d;
+  --on-ink: #fffdf8;
+  --positive: #a63422;
+  --surface: #fffdf8;
+  color: #1f2523;
+  background: #f4f1eb;
+  font-family: Inter, "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 20rem;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 0.1875rem solid #a63422;
+  outline-offset: 0.1875rem;
+}
