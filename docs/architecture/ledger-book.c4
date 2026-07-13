@@ -1,0 +1,200 @@
+specification {
+  element person { style { shape person } }
+  element softwaresystem
+  element existingsystem
+  element spa { style { shape browser } }
+  element container
+  element database { style { shape storage } }
+  element component { style { shape component } }
+}
+
+model {
+  investor = person 'Investor' {
+    description 'Single demo user who imports a portfolio and reads factual analysis.'
+  }
+
+  cmoney = existingsystem 'Authorized CMoney Data' {
+    description 'Authorized historical price, chip, fundamental, and discussion evidence source.'
+  }
+
+  aws-bedrock = existingsystem 'AWS Bedrock' {
+    description 'External managed AI platform.'
+
+    agentcore = container 'Bedrock AgentCore' {
+      technology 'AWS Bedrock AgentCore'
+      description 'Orchestrates factual, scoped analysis generation.'
+    }
+    knowledge-base = container 'Bedrock Knowledge Base' {
+      technology 'Amazon Bedrock Knowledge Bases'
+      description 'Holds authorized RAG chunks with security and date metadata.'
+    }
+  }
+
+  ledger-book = softwaresystem '股票帳本 Ledger Book' {
+    description 'Quantifies portfolio performance and provides non-advisory historical analysis.'
+
+    web-spa = spa 'Browser SPA' {
+      technology 'Vue 3 + Vite'
+      description 'Demo import, dashboard, and time-travel report interface.'
+    }
+    ledger-api = container 'Ledger Book API' {
+      technology 'Bun + TypeScript + Elysia'
+      description 'Synchronous REST API and business orchestration.'
+
+      import-controller = component 'Demo Import Controller' {
+        technology 'Elysia route handler'
+        description 'Starts one hardcoded demo import.'
+      }
+      ledger-service = component 'Immutable Ledger Service' {
+        technology 'TypeScript'
+        description 'Appends entries, creates reversals, and invalidates derived dashboard cache.'
+      }
+      dashboard-controller = component 'Dashboard Controller' {
+        technology 'Elysia route handler'
+        description 'Serves the selected-date dashboard resource.'
+      }
+      performance-service = component 'Performance Service' {
+        technology 'TypeScript + node-irr + @railpath/finance-toolkit'
+        description 'Builds valuations, XIRR, TWR, and benchmark values.'
+      }
+      report-controller = component 'Time-Travel Report Controller' {
+        technology 'Elysia route handler'
+        description 'Creates or retrieves a selected-date report.'
+      }
+      analysis-service = component 'Analysis Service' {
+        technology 'TypeScript + AWS SDK'
+        description 'Retrieves evidence, invokes AgentCore, persists audit data, and caches passed reports.'
+      }
+      compliance-gate = component 'Compliance Gate' {
+        technology 'TypeScript policy'
+        description 'Rejects investment-advice language and records report status.'
+      }
+    }
+    ledger-db = database 'Ledger Book Database' {
+      technology 'PostgreSQL + Prisma'
+      description 'System of record for append-only ledger, seeds, derived data, and report audit data.'
+    }
+    ledger-cache = container 'Derived Response Cache' {
+      technology 'Redis'
+      description 'Caches dashboard responses and passed time-travel reports.'
+    }
+    seed-loader = container 'Demo Data Seed Loader' {
+      technology 'Bun + TypeScript CLI'
+      description 'Repeatably loads approved demo data and RAG chunks.'
+    }
+  }
+
+  investor -> ledger-book 'imports demo ledger, views performance, requests analysis' {
+    technology 'HTTPS'
+  }
+  ledger-book -> cmoney 'imports authorized historical evidence' {
+    technology 'controlled data transfer'
+  }
+  ledger-book -> aws-bedrock 'generates factual reports' {
+    technology 'AWS SDK + HTTPS'
+  }
+  investor -> ledger-book.web-spa 'uses' {
+    technology 'HTTPS'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api 'calls portfolio APIs' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.ledger-api -> ledger-book.ledger-db 'reads and writes' {
+    technology 'SQL'
+  }
+  ledger-book.ledger-api -> ledger-book.ledger-cache 'reads and writes derived responses' {
+    technology 'Redis protocol'
+  }
+  ledger-book.ledger-api -> aws-bedrock.agentcore 'invokes grounded analysis' {
+    technology 'AWS SDK + HTTPS'
+  }
+  ledger-book.seed-loader -> cmoney 'imports authorized evidence' {
+    technology 'controlled data transfer'
+  }
+  ledger-book.seed-loader -> ledger-book.ledger-db 'seeds prices, evidence, and demo data' {
+    technology 'SQL'
+  }
+  ledger-book.seed-loader -> aws-bedrock.knowledge-base 'indexes RAG chunks' {
+    technology 'AWS SDK + HTTPS'
+  }
+  aws-bedrock.agentcore -> aws-bedrock.knowledge-base 'retrieves scoped evidence' {
+    technology 'Bedrock internal API'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api.import-controller 'starts import' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api.dashboard-controller 'loads dashboard' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api.report-controller 'requests report' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.ledger-api.import-controller -> ledger-book.ledger-api.ledger-service 'imports immutable entries' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.ledger-service -> ledger-book.ledger-db 'appends ledger' {
+    technology 'SQL'
+  }
+  ledger-book.ledger-api.ledger-service -> ledger-book.ledger-cache 'invalidates dashboard cache' {
+    technology 'Redis protocol'
+  }
+  ledger-book.ledger-api.dashboard-controller -> ledger-book.ledger-api.performance-service 'loads dashboard' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.performance-service -> ledger-book.ledger-db 'reads snapshots, prices, and ledger' {
+    technology 'SQL'
+  }
+  ledger-book.ledger-api.performance-service -> ledger-book.ledger-cache 'gets or stores dashboard' {
+    technology 'Redis protocol'
+  }
+  ledger-book.ledger-api.report-controller -> ledger-book.ledger-api.analysis-service 'creates or reads report' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.analysis-service -> ledger-book.ledger-db 'retrieves evidence and stores report audit data' {
+    technology 'SQL'
+  }
+  ledger-book.ledger-api.analysis-service -> aws-bedrock.agentcore 'invokes factual synthesis' {
+    technology 'AWS SDK + HTTPS'
+  }
+  ledger-book.ledger-api.analysis-service -> ledger-book.ledger-api.compliance-gate 'checks generated report' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.analysis-service -> ledger-book.ledger-cache 'caches passed report' {
+    technology 'Redis protocol'
+  }
+  ledger-book.ledger-api.compliance-gate -> ledger-book.ledger-db 'records compliance status' {
+    technology 'SQL'
+  }
+}
+
+views {
+  view index {
+    title 'Landscape — 股票帳本 Ledger Book'
+    include *
+  }
+
+  view context {
+    title 'System Context — 股票帳本 Ledger Book'
+    include ledger-book
+    include -> ledger-book ->
+  }
+
+  view containers of ledger-book {
+    title 'Containers — 股票帳本 Ledger Book'
+    include *
+    include investor
+    include cmoney
+    include aws-bedrock
+    include aws-bedrock.*
+  }
+
+  view ledger-api of ledger-book.ledger-api {
+    title 'Components — Ledger Book API'
+    include *
+    include -> ledger-book.ledger-api ->
+    include ledger-book.web-spa
+    include ledger-book.ledger-db
+    include ledger-book.ledger-cache
+    include aws-bedrock.agentcore
+  }
+}
