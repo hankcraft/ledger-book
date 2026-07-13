@@ -6,7 +6,11 @@ export function formatCurrency(value: number, currency = "TWD"): string {
   }).format(value);
 }
 
-export function formatPercent(value: number): string {
+export function formatPercent(value: number | null): string {
+  if (value === null) {
+    return "—";
+  }
+
   return new Intl.NumberFormat("zh-TW", {
     signDisplay: "always",
     style: "percent",

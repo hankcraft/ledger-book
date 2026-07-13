@@ -65,9 +65,9 @@ export function useLedgerBook() {
     }
 
     availableDates.value = [
-      ...new Set([...availableDates.value, ...next.timeline.map((point) => point.date)]),
+      ...new Set([...availableDates.value, ...next.timelinePoints.map((point) => point.date)]),
     ].toSorted();
-    selectedDate.value = next.asOfDate;
+    selectedDate.value = next.latestSnapshot.asOfDate;
     if (!next.holdings.some((holding) => holding.securityId === selectedSecurityId.value)) {
       selectedSecurityId.value = next.holdings[0]?.securityId ?? "";
     }

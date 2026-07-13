@@ -1,19 +1,30 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { PerformanceMetrics } from "@ledger-book/contracts";
+import type { PerformanceMetrics, PortfolioSummary } from "@ledger-book/contracts";
 
-import { formatPercent } from "../lib/format";
+import { formatCurrency, formatPercent } from "../lib/format";
 
 const props = defineProps<{
+  closingValue: number;
   metrics: PerformanceMetrics;
+  portfolio: PortfolioSummary;
   warnings: readonly string[];
 }>();
 
 const metricItems = computed(() => [
   { label: "XIRR", note: "資金進出後的年化報酬", value: formatPercent(props.metrics.xirr) },
   { label: "TWR", note: "排除資金時點的績效", value: formatPercent(props.metrics.twr) },
-  { label: "0050", note: "同期基準報酬", value: formatPercent(props.metrics.benchmarkReturn) },
+  {
+    label: props.portfolio.benchmarkSymbol,
+    note: "同期基準報酬",
+    value: formatPercent(props.metrics.benchmarkReturn),
+  },
+  {
+    label: "期末資產",
+    note: "所選估值日的總資產",
+    value: formatCurrency(props.closingValue, props.portfolio.baseCurrency),
+  },
 ]);
 </script>
 
@@ -21,7 +32,7 @@ const metricItems = computed(() => [
   <section class="performance-summary" aria-labelledby="performance-heading">
     <div class="section-heading">
       <p class="eyebrow">績效快照</p>
-      <h2 id="performance-heading">回報不只看帳面漲跌</h2>
+      <h2 id="performance-heading">所選期間的績效快照</h2>
     </div>
 
     <dl class="metrics">
@@ -69,7 +80,7 @@ const metricItems = computed(() => [
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
   margin: var(--space-6) 0 0;
 }
@@ -115,6 +126,12 @@ const metricItems = computed(() => [
   color: var(--muted);
   font-size: var(--text-meta);
   line-height: 1.5;
+}
+
+@media (min-width: 48rem) {
+  .metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 24rem) {

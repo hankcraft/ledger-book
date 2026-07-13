@@ -23,7 +23,7 @@ const sentiment = computed(() => {
   }
 
   return {
-    className: `sentiment--${props.report.sentiment}`,
+    className: `sentiment--${props.report.uiColor}`,
     label:
       props.report.sentiment === "bullish"
         ? "偏多情緒"
@@ -162,18 +162,17 @@ const sentiment = computed(() => {
   font-weight: 700;
 }
 
-.sentiment--bullish {
-  color: var(--positive);
-  background: var(--success-subtle);
-}
-
-.sentiment--bearish {
-  border-color: var(--tertiary);
+.sentiment--red {
   color: var(--negative);
   background: var(--danger-subtle);
 }
 
-.sentiment--neutral {
+.sentiment--green {
+  color: var(--positive);
+  background: var(--success-subtle);
+}
+
+.sentiment--gray {
   color: var(--muted);
   background: var(--neutral-subtle);
 }

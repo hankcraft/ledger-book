@@ -7,48 +7,37 @@ import { createTimelinePath } from "../lib/chart";
 import { formatCurrency, formatDate } from "../lib/format";
 
 const props = defineProps<{
-  availableDates: readonly string[];
+  benchmarkSymbol: string;
   loading: boolean;
   selectedDate: string;
-  timeline: readonly TimelinePoint[];
-}>();
-
-const emit = defineEmits<{
-  selectDate: [date: string];
+  timelinePoints: readonly TimelinePoint[];
 }>();
 
 const bounds = { height: 116, width: 328 };
-const portfolioPath = computed(() => createTimelinePath(props.timeline, "marketValue", bounds));
-const benchmarkPath = computed(() => createTimelinePath(props.timeline, "benchmarkValue", bounds));
+const portfolioPath = computed(() =>
+  createTimelinePath(props.timelinePoints, "marketValue", bounds),
+);
+const benchmarkPath = computed(() =>
+  createTimelinePath(props.timelinePoints, "benchmarkValue", bounds),
+);
 const selectedPoint = computed(
-  () => props.timeline.find((point) => point.date === props.selectedDate) ?? props.timeline.at(-1),
+  () =>
+    props.timelinePoints.find((point) => point.date === props.selectedDate) ??
+    props.timelinePoints.at(-1),
 );
 const selectedValue = computed(() =>
   selectedPoint.value ? formatCurrency(selectedPoint.value.marketValue) : "—",
 );
-
-function selectDate(event: Event): void {
-  if (event.target instanceof HTMLSelectElement) {
-    emit("selectDate", event.target.value);
-  }
-}
 </script>
 
 <template>
   <section class="asset-timeline" :aria-busy="loading" aria-labelledby="timeline-heading">
     <div class="timeline-header">
       <div>
-        <p class="eyebrow">資產走勢</p>
+        <p class="eyebrow">期間績效</p>
         <h2 id="timeline-heading">{{ selectedValue }}</h2>
       </div>
-      <label class="date-control">
-        <span>估值日</span>
-        <select :value="selectedDate" @change="selectDate">
-          <option v-for="date in availableDates" :key="date" :value="date">
-            {{ formatDate(date) }}
-          </option>
-        </select>
-      </label>
+      <p class="timeline-date">截至 {{ formatDate(selectedDate) }}</p>
     </div>
 
     <svg
@@ -58,8 +47,8 @@ function selectDate(event: Event): void {
       aria-labelledby="chart-title chart-description"
       aria-describedby="chart-summary"
     >
-      <title id="chart-title">投資組合與 0050 基準走勢</title>
-      <desc id="chart-description">藍線為投資組合資產，灰線為 0050 基準。</desc>
+      <title id="chart-title">投資組合與 {{ benchmarkSymbol }} 基準走勢</title>
+      <desc id="chart-description">藍線為投資組合資產，灰線為 {{ benchmarkSymbol }} 基準。</desc>
       <g class="chart-grid" transform="translate(16 16)">
         <line x1="0" x2="328" y1="0" y2="0" />
         <line x1="0" x2="328" y1="58" y2="58" />
@@ -78,7 +67,8 @@ function selectDate(event: Event): void {
         ><span class="legend-line legend-line--portfolio" aria-hidden="true"></span>投資組合</span
       >
       <span
-        ><span class="legend-line legend-line--benchmark" aria-hidden="true"></span>0050 基準</span
+        ><span class="legend-line legend-line--benchmark" aria-hidden="true"></span
+        >{{ benchmarkSymbol }} 基準</span
       >
     </div>
 
@@ -86,17 +76,21 @@ function selectDate(event: Event): void {
       <summary>查看圖表資料</summary>
       <table>
         <caption>
-          投資組合與 0050 基準歷史資料
+          投資組合與
+          {{
+            benchmarkSymbol
+          }}
+          基準歷史資料
         </caption>
         <thead>
           <tr>
             <th scope="col">日期</th>
             <th scope="col">投資組合</th>
-            <th scope="col">0050 基準</th>
+            <th scope="col">{{ benchmarkSymbol }} 基準</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="point in timeline" :key="point.date">
+          <tr v-for="point in timelinePoints" :key="point.date">
             <td>{{ formatDate(point.date) }}</td>
             <td>{{ formatCurrency(point.marketValue) }}</td>
             <td>{{ formatCurrency(point.benchmarkValue) }}</td>
@@ -143,21 +137,11 @@ function selectDate(event: Event): void {
   letter-spacing: -0.02em;
 }
 
-.date-control {
-  display: grid;
-  gap: var(--space-1);
+.timeline-date {
+  margin: 0;
   color: var(--muted);
-  font-size: var(--text-caption);
-  font-weight: 700;
-}
-
-.date-control select {
-  max-width: 10rem;
-  border: 0;
-  border-radius: var(--radius-control);
-  padding: var(--space-2);
-  color: var(--ink);
-  background: var(--neutral-subtle);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
 }
 
 .chart {

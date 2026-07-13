@@ -73,18 +73,23 @@ watch(dashboardFocusRequested, async (requested) => {
 <style scoped>
 .app-shell {
   min-height: 100vh;
-  padding: var(--space-4);
   background: var(--canvas);
 }
 
 .site-header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   display: flex;
-  align-items: baseline;
+  min-height: 4.75rem;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  width: min(100%, 70rem);
+  width: min(100%, 95rem);
   margin: 0 auto;
-  padding-bottom: var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas);
 }
 
 .brand {
@@ -103,19 +108,27 @@ watch(dashboardFocusRequested, async (requested) => {
 
 .main-content {
   display: grid;
-  width: min(100%, 70rem);
-  min-height: calc(100vh - 5rem);
+  width: min(100%, 95rem);
+  min-height: calc(100vh - 4.75rem);
   margin: 0 auto;
+  padding: var(--space-6) var(--space-4) calc(var(--space-8) * 2);
   place-items: start;
 }
 
 @media (min-width: 48rem) {
-  .app-shell {
-    padding: var(--space-6) var(--space-8);
+  .site-header {
+    padding-right: var(--space-6);
+    padding-left: var(--space-6);
   }
 
+  .main-content {
+    padding: calc(var(--space-8) * 1.125) var(--space-6) calc(var(--space-8) * 2.25);
+  }
+}
+
+@media (max-width: 47.5rem) {
   .site-header {
-    padding-bottom: calc(var(--space-8) * 1.5);
+    position: static;
   }
 }
 </style>

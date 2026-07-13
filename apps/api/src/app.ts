@@ -6,7 +6,10 @@ import {
   type DemoImportResult,
   type EvidenceCitation,
   type Holding,
+  type LedgerEntry,
+  type LedgerEntryType,
   type PerformanceMetrics,
+  type PortfolioSnapshot,
   type PortfolioSummary,
   type TimeTravelReport,
 } from "@ledger-book/contracts";
@@ -28,8 +31,6 @@ const securities = [
   { id: "2330", symbol: "2330", name: "台積電" },
   { id: "2317", symbol: "2317", name: "鴻海" },
   { id: "2454", symbol: "2454", name: "聯發科" },
-  { id: "2308", symbol: "2308", name: "台達電" },
-  { id: "2881", symbol: "2881", name: "富邦金" },
 ] as const;
 
 type SecurityId = (typeof securities)[number]["id"];
@@ -46,69 +47,42 @@ const prices: readonly Price[] = [
   { symbol: "2330", date: "2024-01-02", close: 590 },
   { symbol: "2317", date: "2024-01-02", close: 102 },
   { symbol: "2454", date: "2024-01-02", close: 900 },
-  { symbol: "2308", date: "2024-01-02", close: 320 },
-  { symbol: "2881", date: "2024-01-02", close: 60 },
   { symbol: "0050", date: "2024-04-30", close: 166 },
   { symbol: "00878", date: "2024-04-30", close: 21.8 },
   { symbol: "2330", date: "2024-04-30", close: 780 },
   { symbol: "2317", date: "2024-04-30", close: 164 },
   { symbol: "2454", date: "2024-04-30", close: 1_000 },
-  { symbol: "2308", date: "2024-04-30", close: 360 },
-  { symbol: "2881", date: "2024-04-30", close: 65 },
   { symbol: "0050", date: "2024-08-30", close: 185 },
   { symbol: "00878", date: "2024-08-30", close: 22.1 },
   { symbol: "2330", date: "2024-08-30", close: 970 },
   { symbol: "2317", date: "2024-08-30", close: 185 },
   { symbol: "2454", date: "2024-08-30", close: 1_200 },
-  { symbol: "2308", date: "2024-08-30", close: 430 },
-  { symbol: "2881", date: "2024-08-30", close: 70 },
   { symbol: "0050", date: "2024-12-31", close: 192 },
   { symbol: "00878", date: "2024-12-31", close: 21.7 },
   { symbol: "2330", date: "2024-12-31", close: 1_060 },
   { symbol: "2317", date: "2024-12-31", close: 180 },
   { symbol: "2454", date: "2024-12-31", close: 1_350 },
-  { symbol: "2308", date: "2024-12-31", close: 480 },
-  { symbol: "2881", date: "2024-12-31", close: 67 },
   { symbol: "0050", date: "2025-03-31", close: 178 },
   { symbol: "00878", date: "2025-03-31", close: 20.7 },
   { symbol: "2330", date: "2025-03-31", close: 960 },
   { symbol: "2317", date: "2025-03-31", close: 150 },
   { symbol: "2454", date: "2025-03-31", close: 1_250 },
-  { symbol: "2308", date: "2025-03-31", close: 460 },
-  { symbol: "2881", date: "2025-03-31", close: 63 },
   { symbol: "0050", date: "2025-06-30", close: 194 },
   { symbol: "00878", date: "2025-06-30", close: 21.3 },
   { symbol: "2330", date: "2025-06-30", close: 1_080 },
   { symbol: "2317", date: "2025-06-30", close: 165 },
   { symbol: "2454", date: "2025-06-30", close: 1_450 },
-  { symbol: "2308", date: "2025-06-30", close: 520 },
-  { symbol: "2881", date: "2025-06-30", close: 69 },
   { symbol: "0050", date: "2025-09-30", close: 202 },
   { symbol: "00878", date: "2025-09-30", close: 21.8 },
   { symbol: "2330", date: "2025-09-30", close: 1_200 },
   { symbol: "2317", date: "2025-09-30", close: 185 },
   { symbol: "2454", date: "2025-09-30", close: 1_600 },
-  { symbol: "2308", date: "2025-09-30", close: 570 },
-  { symbol: "2881", date: "2025-09-30", close: 74 },
   { symbol: "0050", date: "2025-12-31", close: 210 },
   { symbol: "00878", date: "2025-12-31", close: 22.5 },
   { symbol: "2330", date: "2025-12-31", close: 1_350 },
   { symbol: "2317", date: "2025-12-31", close: 200 },
   { symbol: "2454", date: "2025-12-31", close: 1_800 },
-  { symbol: "2308", date: "2025-12-31", close: 620 },
-  { symbol: "2881", date: "2025-12-31", close: 80 },
 ];
-
-type LedgerKind = "cash_deposit" | "cash_dividend" | "buy" | "sell";
-
-interface LedgerEntry {
-  id: string;
-  occurredOn: string;
-  kind: LedgerKind;
-  amount: number;
-  securityId?: SecurityId;
-  quantity?: number;
-}
 
 interface Evidence extends EvidenceCitation {
   securityId: SecurityId;
@@ -178,20 +152,30 @@ function isSecurityId(value: string): value is SecurityId {
   return securities.some((security) => security.id === value);
 }
 
-function isLedgerKind(value: string): value is LedgerKind {
-  return ["cash_deposit", "cash_dividend", "buy", "sell"].includes(value);
+function isLedgerEntryType(value: string): value is LedgerEntryType {
+  return ["buy", "sell", "cash_deposit", "cash_withdrawal", "dividend", "fee", "reversal"].includes(
+    value as LedgerEntryType,
+  );
 }
 
 function parseDemoLedger(csv: string): readonly LedgerEntry[] {
   const [header, ...rows] = csv.trim().split(/\r?\n/);
-  if (header !== "id,occurred_on,kind,amount,security_id,quantity") {
+  if (header !== "id,occurred_on,entry_type,gross_cash_amount,fee_amount,security_id,quantity") {
     throw new Error("Demo ledger CSV header is invalid.");
   }
 
-  return rows.map((row) => {
-    const [id = "", occurredOn = "", kind = "", amount = "", securityId = "", quantity = ""] =
-      row.split(",");
-    const parsedAmount = Number(amount);
+  return rows.map((row, index) => {
+    const [
+      id = "",
+      occurredOn = "",
+      entryType = "",
+      grossCashAmount = "",
+      feeAmount = "",
+      securityId = "",
+      quantity = "",
+    ] = row.split(",");
+    const parsedGrossCashAmount = Number(grossCashAmount);
+    const parsedFeeAmount = Number(feeAmount);
     const parsedSecurityId =
       securityId === "" ? undefined : isSecurityId(securityId) ? securityId : undefined;
     const parsedQuantity = quantity === "" ? undefined : Number(quantity);
@@ -199,25 +183,32 @@ function parseDemoLedger(csv: string): readonly LedgerEntry[] {
     if (
       !id ||
       !occurredOn ||
-      !kind ||
+      !entryType ||
       !isIsoDate(occurredOn) ||
-      !isLedgerKind(kind) ||
-      !Number.isFinite(parsedAmount) ||
+      !isLedgerEntryType(entryType) ||
+      !Number.isFinite(parsedGrossCashAmount) ||
+      !Number.isFinite(parsedFeeAmount) ||
+      parsedFeeAmount < 0 ||
       (securityId !== "" && parsedSecurityId === undefined) ||
       (parsedQuantity !== undefined &&
         (!Number.isInteger(parsedQuantity) || parsedQuantity <= 0)) ||
-      ((kind === "buy" || kind === "sell") &&
+      ((entryType === "buy" || entryType === "sell") &&
         (parsedSecurityId === undefined || parsedQuantity === undefined)) ||
-      (kind === "cash_deposit" && parsedSecurityId !== undefined)
+      ((entryType === "cash_deposit" || entryType === "cash_withdrawal") &&
+        parsedSecurityId !== undefined) ||
+      (entryType === "dividend" && parsedSecurityId === undefined)
     ) {
       throw new Error(`Demo ledger CSV row is invalid: ${row}`);
     }
 
     const entry: LedgerEntry = {
       id,
+      portfolioId: DEMO_PORTFOLIO_ID,
+      sequence: index + 1,
       occurredOn,
-      kind,
-      amount: parsedAmount,
+      entryType,
+      grossCashAmount: parsedGrossCashAmount,
+      feeAmount: parsedFeeAmount,
     };
     if (parsedSecurityId !== undefined) entry.securityId = parsedSecurityId;
     if (parsedQuantity !== undefined) entry.quantity = parsedQuantity;
@@ -226,6 +217,10 @@ function parseDemoLedger(csv: string): readonly LedgerEntry[] {
 }
 
 const demoLedger = parseDemoLedger(demoLedgerCsv);
+
+function cashEffect(entry: LedgerEntry): number {
+  return entry.grossCashAmount - entry.feeAmount;
+}
 
 export interface DemoStore {
   importDemo(): DemoImportResult | undefined;
@@ -250,10 +245,11 @@ export function createDemoStore(): DemoStore {
           (entry) =>
             entry.occurredOn <= asOfDate &&
             entry.securityId === security.id &&
-            (entry.kind === "buy" || entry.kind === "sell"),
+            (entry.entryType === "buy" || entry.entryType === "sell"),
         )
         .reduce(
-          (total, entry) => total + (entry.kind === "buy" ? entry.quantity! : -entry.quantity!),
+          (total, entry) =>
+            total + (entry.entryType === "buy" ? entry.quantity! : -entry.quantity!),
           0,
         );
       const current = priceOnOrBefore(security.id, asOfDate);
@@ -276,25 +272,27 @@ export function createDemoStore(): DemoStore {
     return readyHoldings.length === securities.length ? readyHoldings : undefined;
   }
 
-  function getDashboard(asOfDate: string): Dashboard | undefined {
+  function getDashboard(requestedDate: string): Dashboard | undefined {
     if (!imported) return { state: "empty", portfolio };
 
-    const dates = knownPriceDates(asOfDate);
+    const dates = knownPriceDates(requestedDate);
     const initialBenchmark = priceOnOrBefore("0050", "2024-01-02");
     if (dates.length === 0 || !initialBenchmark) return undefined;
 
-    const holdings = getHoldings(asOfDate);
+    const snapshotDate = dates.at(-1);
+    if (!snapshotDate) return undefined;
+    const holdings = getHoldings(snapshotDate);
     if (!holdings) return undefined;
 
     const initialInvestment = entries
-      .filter((entry) => entry.kind === "cash_deposit" && entry.occurredOn <= asOfDate)
-      .reduce((total, entry) => total + entry.amount, 0);
+      .filter((entry) => entry.entryType === "cash_deposit" && entry.occurredOn <= snapshotDate)
+      .reduce((total, entry) => total + cashEffect(entry), 0);
     const timeline = dates.map((date) => {
       const pointHoldings = getHoldings(date);
       const benchmark = priceOnOrBefore("0050", date);
       const cash = entries
         .filter((entry) => entry.occurredOn <= date)
-        .reduce((total, entry) => total + entry.amount, 0);
+        .reduce((total, entry) => total + cashEffect(entry), 0);
       if (!pointHoldings || !benchmark) return undefined;
 
       return {
@@ -314,8 +312,8 @@ export function createDemoStore(): DemoStore {
     if (!firstPoint || !finalPoint) return undefined;
 
     const xirrCashFlows = entries
-      .filter((entry) => entry.kind === "cash_deposit" && entry.occurredOn <= asOfDate)
-      .map((entry) => ({ amount: -entry.amount, date: entry.occurredOn }));
+      .filter((entry) => entry.entryType === "cash_deposit" && entry.occurredOn <= snapshotDate)
+      .map((entry) => ({ amount: -cashEffect(entry), date: entry.occurredOn }));
     const metrics: PerformanceMetrics = {
       xirr: xirrCashFlows.some((cashFlow) => cashFlow.date < finalPoint.date)
         ? calculateAnnualXirr([
@@ -332,14 +330,24 @@ export function createDemoStore(): DemoStore {
           : 0,
       benchmarkReturn: finalPoint.benchmarkValue / firstPoint.benchmarkValue - 1,
     };
+    const cashValue = entries
+      .filter((entry) => entry.occurredOn <= snapshotDate)
+      .reduce((total, entry) => total + cashEffect(entry), 0);
+    const latestSnapshot: PortfolioSnapshot = {
+      asOfDate: finalPoint.date,
+      marketValue: finalPoint.marketValue,
+      cashValue,
+      holdings,
+    };
 
     return {
       state: "ready",
       portfolio,
-      asOfDate: finalPoint.date,
-      timeline: readyTimeline,
+      latestSnapshot,
+      timelinePoints: readyTimeline,
       holdings,
       metrics,
+      benchmark: { symbol: portfolio.benchmarkSymbol, return: metrics.benchmarkReturn },
       warnings: [],
     };
   }
@@ -384,6 +392,7 @@ export function createDemoStore(): DemoStore {
         symbol: security.symbol,
         asOfDate,
         sentiment: securityId === "2330" ? "bullish" : "neutral",
+        uiColor: securityId === "2330" ? "red" : "gray",
         summary,
         citations,
         complianceStatus: "passed",
