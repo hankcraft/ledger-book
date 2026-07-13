@@ -75,7 +75,7 @@
 
 | 元件層級 | 技術選型 | 負責任務與職責 |
 | --- | --- | --- |
-| **前端 (Frontend)** | Vue (SSR) | 確保複雜圖表（ECharts/Chart.js）與儀表板的初次載入效能，呈現流暢的視覺回饋 。
+| **前端 (Frontend)** | Vue (SPA) | 確保複雜圖表（ECharts/Chart.js）與儀表板的初次載入效能，呈現流暢的視覺回饋 。
 
  |
 | **後端核心 (Backend API)** | Elysia.js (TypeScript), Bun runtime | 提供嚴謹的型別系統，防止鬆散資料破壞金融計算，並將 API 與商業邏輯模組化解耦 。
