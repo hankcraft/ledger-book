@@ -23,6 +23,8 @@ The API listens on `http://localhost:3000`. Vite proxies `/api` to that address;
 | `bun run build` | Type-check and build all workspaces. |
 | `bun run lint` | Run oxlint. |
 | `bun run format:check` | Check formatting. |
+| `bun run c4:view` | View C4 diagrams with live reload. |
+| `bun run c4:validate` | Validate the LikeC4 model. |
 
 ## Current POC
 
@@ -68,5 +70,5 @@ The C4 model is architecture intent, not a claim about the current in-memory imp
 Validate diagram changes:
 
 ```sh
-bunx likec4@1.53.0 validate --json --no-layout --file docs/architecture/ledger-book.c4 docs/architecture
+bun run c4:validate
 ```
