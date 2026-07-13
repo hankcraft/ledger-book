@@ -7,6 +7,7 @@ import { formatCurrency, formatPercent } from "../lib/format";
 
 const props = defineProps<{
   closingValue: number;
+  compact?: boolean;
   metrics: PerformanceMetrics;
   portfolio: PortfolioSummary;
   warnings: readonly string[];
@@ -29,7 +30,11 @@ const metricItems = computed(() => [
 </script>
 
 <template>
-  <section class="performance-summary" aria-labelledby="performance-heading">
+  <section
+    class="performance-summary"
+    :class="{ 'performance-summary--compact': compact }"
+    aria-labelledby="performance-heading"
+  >
     <div class="section-heading">
       <p class="eyebrow">績效快照</p>
       <h2 id="performance-heading">所選期間的績效快照</h2>
@@ -131,6 +136,10 @@ const metricItems = computed(() => [
 @media (min-width: 48rem) {
   .metrics {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .performance-summary--compact .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -115,6 +115,31 @@ describe("demo API", () => {
     expect(entries.some((entry) => entry.entryType === "dividend")).toBe(true);
   });
 
+  test("exposes the imported immutable ledger as the dashboard's canonical event list", async () => {
+    const app = createApp();
+    const ledgerUrl = `http://localhost/api/portfolios/${DEMO_PORTFOLIO_ID}/ledger`;
+
+    const beforeImport = await app.handle(new Request(ledgerUrl));
+    expect(beforeImport.status).toBe(409);
+
+    await app.handle(importRequest());
+    const response = await app.handle(new Request(ledgerUrl));
+    const entries = (await response.json()) as {
+      entryType: string;
+      occurredOn: string;
+      sequence: number;
+    }[];
+
+    expect(response.status).toBe(200);
+    expect(entries).toHaveLength(23);
+    expect(entries[0]).toMatchObject({
+      occurredOn: "2024-01-02",
+      entryType: "cash_deposit",
+      sequence: 1,
+    });
+    expect(entries.at(-1)).toMatchObject({ occurredOn: "2025-12-22", sequence: 23 });
+  });
+
   test("returns only dated evidence and rejects advice wording", async () => {
     const app = createApp();
     await app.handle(importRequest());

@@ -14,11 +14,15 @@ const {
   importDemo,
   importPhase,
   landingError,
+  ledgerEntries,
+  ledgerError,
+  ledgerLoading,
   loadDashboard,
   readyDashboard,
   report,
   reportError,
   reportPhase,
+  retryLedger,
   retryReport,
   selectDate,
   selectedDate,
@@ -55,12 +59,16 @@ watch(dashboardFocusRequested, async (requested) => {
         :dashboard-busy="dashboardBusy"
         :dashboard-error="dashboardError"
         :available-dates="availableDates"
+        :ledger-entries="ledgerEntries"
+        :ledger-error="ledgerError"
+        :ledger-loading="ledgerLoading"
         :report="report"
         :report-error="reportError"
         :report-phase="reportPhase"
         :selected-date="selectedDate"
         :selected-security-id="selectedSecurityId"
         @retry-dashboard="loadDashboard"
+        @retry-ledger="retryLedger"
         @retry-report="retryReport"
         @select-date="selectDate"
         @select-holding="selectHolding"

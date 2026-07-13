@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, shallowRef, useTemplateRef } from "vue";
 
-import type { Holding, ReadyDashboard, TimeTravelReport } from "@ledger-book/contracts";
+import type {
+  Holding,
+  LedgerEntry,
+  ReadyDashboard,
+  TimeTravelReport,
+} from "@ledger-book/contracts";
 
 import AssetTimeline from "./AssetTimeline.vue";
-import HoldingsList from "./HoldingsList.vue";
+import LedgerList from "./LedgerList.vue";
 import PerformanceSummary from "./PerformanceSummary.vue";
 import TimeTravelPanel from "./TimeTravelPanel.vue";
 import { formatDate } from "../lib/format";
@@ -14,6 +19,9 @@ const props = defineProps<{
   dashboard: ReadyDashboard;
   dashboardBusy: boolean;
   dashboardError: string | null;
+  ledgerEntries: readonly LedgerEntry[];
+  ledgerError: string | null;
+  ledgerLoading: boolean;
   report: TimeTravelReport | null;
   reportError: string | null;
   reportPhase: "error" | "idle" | "loading";
@@ -23,6 +31,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   retryDashboard: [];
+  retryLedger: [];
   retryReport: [];
   selectDate: [date: string];
   selectHolding: [securityId: string];
@@ -35,11 +44,17 @@ const selectedHolding = computed<Holding | null>(
 );
 
 const heading = useTemplateRef<HTMLHeadingElement>("heading");
-const workbenchView = shallowRef<"holdings" | "performance">("performance");
+const workbenchView = shallowRef<"ledger" | "performance">("performance");
 
 function selectDate(event: Event): void {
   if (event.target instanceof HTMLSelectElement) {
     emit("selectDate", event.target.value);
+  }
+}
+
+function selectHolding(event: Event): void {
+  if (event.target instanceof HTMLSelectElement) {
+    emit("selectHolding", event.target.value);
   }
 }
 
@@ -72,29 +87,6 @@ defineExpose({ focusHeading });
 
     <p v-if="dashboardError" class="dashboard-error" role="alert">{{ dashboardError }}</p>
 
-    <section class="valuation-controls" aria-labelledby="valuation-heading">
-      <div>
-        <p class="eyebrow">計算範圍</p>
-        <h2 id="valuation-heading">估值日</h2>
-      </div>
-      <label class="valuation-select">
-        <span>從已載入的估值日選擇</span>
-        <select :value="selectedDate" @change="selectDate">
-          <option v-for="date in availableDates" :key="date" :value="date">
-            {{ formatDate(date) }}
-          </option>
-        </select>
-      </label>
-      <p class="valuation-helper">績效、持倉與回溯資料會同步更新至此日期。</p>
-    </section>
-
-    <PerformanceSummary
-      :closing-value="dashboard.latestSnapshot.marketValue"
-      :metrics="dashboard.metrics"
-      :portfolio="dashboard.portfolio"
-      :warnings="dashboard.warnings"
-    />
-
     <section class="dashboard-workbench" :data-workbench-view="workbenchView">
       <div class="workbench-switch" role="group" aria-label="工作檯視圖">
         <button
@@ -106,25 +98,65 @@ defineExpose({ focusHeading });
         </button>
         <button
           type="button"
-          :aria-pressed="workbenchView === 'holdings'"
-          @click="workbenchView = 'holdings'"
+          :aria-pressed="workbenchView === 'ledger'"
+          @click="workbenchView = 'ledger'"
         >
-          持倉
+          帳本
         </button>
       </div>
-      <HoldingsList
-        class="workbench-panel workbench-panel--holdings"
-        :holdings="dashboard.holdings"
-        :selected-security-id="selectedSecurityId"
-        @select-holding="emit('selectHolding', $event)"
+      <LedgerList
+        class="workbench-panel workbench-panel--ledger"
+        :entries="ledgerEntries"
+        :error="ledgerError"
+        :loading="ledgerLoading"
+        @retry="emit('retryLedger')"
       />
-      <AssetTimeline
-        class="workbench-panel workbench-panel--performance"
-        :benchmark-symbol="dashboard.benchmark.symbol"
-        :loading="dashboardBusy"
-        :selected-date="selectedDate"
-        :timeline-points="dashboard.timelinePoints"
-      />
+      <aside class="performance-pane workbench-panel workbench-panel--performance">
+        <section class="valuation-controls" aria-labelledby="valuation-heading">
+          <div>
+            <p class="eyebrow">計算範圍</p>
+            <h2 id="valuation-heading">估值日</h2>
+          </div>
+          <div class="valuation-selects">
+            <label class="valuation-select">
+              <span>從已載入的估值日選擇</span>
+              <select :value="selectedDate" @change="selectDate">
+                <option v-for="date in availableDates" :key="date" :value="date">
+                  {{ formatDate(date) }}
+                </option>
+              </select>
+            </label>
+            <label class="valuation-select">
+              <span>回溯標的</span>
+              <select :value="selectedSecurityId" @change="selectHolding">
+                <option
+                  v-for="holding in dashboard.holdings"
+                  :key="holding.securityId"
+                  :value="holding.securityId"
+                >
+                  {{ holding.symbol }} {{ holding.name }}
+                </option>
+              </select>
+            </label>
+          </div>
+          <p class="valuation-helper">績效與回溯資料會同步更新至此日期；帳本保留完整交易歷史。</p>
+        </section>
+
+        <PerformanceSummary
+          compact
+          :closing-value="dashboard.latestSnapshot.marketValue"
+          :metrics="dashboard.metrics"
+          :portfolio="dashboard.portfolio"
+          :warnings="dashboard.warnings"
+        />
+
+        <AssetTimeline
+          :benchmark-symbol="dashboard.benchmark.symbol"
+          :loading="dashboardBusy"
+          :selected-date="selectedDate"
+          :timeline-points="dashboard.timelinePoints"
+        />
+      </aside>
     </section>
 
     <TimeTravelPanel
@@ -236,6 +268,12 @@ defineExpose({ focusHeading });
   background: var(--surface);
 }
 
+.performance-pane,
+.valuation-selects {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .valuation-controls h2,
 .valuation-controls p {
   margin: 0;
@@ -256,7 +294,7 @@ defineExpose({ focusHeading });
 }
 
 .valuation-select select {
-  width: min(100%, 20rem);
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   padding: var(--space-2) var(--space-3);
@@ -303,8 +341,8 @@ defineExpose({ focusHeading });
   min-width: 0;
 }
 
-.dashboard-workbench[data-workbench-view="holdings"] .workbench-panel--performance,
-.dashboard-workbench[data-workbench-view="performance"] .workbench-panel--holdings {
+.dashboard-workbench[data-workbench-view="ledger"] .workbench-panel--performance,
+.dashboard-workbench[data-workbench-view="performance"] .workbench-panel--ledger {
   display: none;
 }
 
@@ -322,6 +360,10 @@ defineExpose({ focusHeading });
 
   .workbench-panel {
     display: block !important;
+  }
+
+  .performance-pane.workbench-panel {
+    display: grid !important;
   }
 }
 

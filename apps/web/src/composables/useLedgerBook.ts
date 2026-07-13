@@ -5,6 +5,7 @@ import {
   type Dashboard,
   type DemoImportRequest,
   type DemoImportResult,
+  type LedgerEntry,
   type ReadyDashboard,
   type TimeTravelReport,
   type TimeTravelReportRequest,
@@ -32,6 +33,9 @@ export function useLedgerBook() {
   const dashboardPhase = shallowRef<DashboardPhase>("loading");
   const importing = shallowRef(false);
   const importError = shallowRef<string | null>(null);
+  const ledgerEntries = shallowRef<readonly LedgerEntry[]>([]);
+  const ledgerError = shallowRef<string | null>(null);
+  const ledgerLoading = shallowRef(false);
   const availableDates = shallowRef<readonly string[]>([]);
   const selectedDate = shallowRef("");
   const selectedSecurityId = shallowRef("");
@@ -39,6 +43,8 @@ export function useLedgerBook() {
   const reportError = shallowRef<string | null>(null);
   const reportPhase = shallowRef<ReportPhase>("idle");
   let dashboardRequest = 0;
+  let ledgerRequest = 0;
+  let ledgerLoaded = false;
   let reportRequest = 0;
 
   const readyDashboard = computed<ReadyDashboard | null>(() => {
@@ -70,6 +76,34 @@ export function useLedgerBook() {
     selectedDate.value = next.latestSnapshot.asOfDate;
     if (!next.holdings.some((holding) => holding.securityId === selectedSecurityId.value)) {
       selectedSecurityId.value = next.holdings[0]?.securityId ?? "";
+    }
+
+    if (!ledgerLoaded && !ledgerLoading.value) {
+      void loadLedger();
+    }
+  }
+
+  async function loadLedger(): Promise<void> {
+    const requestId = ++ledgerRequest;
+    ledgerLoading.value = true;
+    ledgerError.value = null;
+
+    try {
+      const entries = await requestJson<LedgerEntry[]>(
+        `/api/portfolios/${DEMO_PORTFOLIO_ID}/ledger`,
+      );
+      if (requestId === ledgerRequest) {
+        ledgerEntries.value = entries;
+        ledgerLoaded = true;
+      }
+    } catch (error) {
+      if (requestId === ledgerRequest) {
+        ledgerError.value = errorMessage(error);
+      }
+    } finally {
+      if (requestId === ledgerRequest) {
+        ledgerLoading.value = false;
+      }
     }
   }
 
@@ -218,11 +252,15 @@ export function useLedgerBook() {
     importDemo,
     importPhase,
     landingError,
+    ledgerEntries: computed(() => ledgerEntries.value),
+    ledgerError: computed(() => ledgerError.value),
+    ledgerLoading: computed(() => ledgerLoading.value),
     loadDashboard,
     readyDashboard,
     report: computed(() => report.value),
     reportError: computed(() => reportError.value),
     reportPhase: computed(() => reportPhase.value),
+    retryLedger: loadLedger,
     retryReport: loadReport,
     selectDate,
     selectedDate: computed(() => selectedDate.value),

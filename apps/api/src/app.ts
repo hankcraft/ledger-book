@@ -461,6 +461,17 @@ export function createApp(store = createDemoStore()) {
       },
       { query: t.Object({ asOfDate: t.Optional(t.String()) }) },
     )
+    .get("/api/portfolios/:portfolioId/ledger", ({ params, set }) => {
+      if (params.portfolioId !== DEMO_PORTFOLIO_ID) {
+        set.status = 404;
+        return error("portfolio_not_found", "找不到投資組合。");
+      }
+      if (!store.hasImported()) {
+        set.status = 409;
+        return error("demo_import_required", "請先匯入 Fake Demo。");
+      }
+      return store.getLedgerEntries();
+    })
     .post(
       "/api/portfolios/:portfolioId/time-travel-reports",
       ({ params, body, set }) => {
