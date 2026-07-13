@@ -1,0 +1,480 @@
+fullstack_app_schema:
+  app:
+    name: 股票帳本 Ledger Book
+    goal: >-
+      以不可變帳本量化真實投資績效，並在指定日期提供有來源的籌碼與情緒事實摘要；
+      降低決策焦慮，不提供投資建議。
+    users:
+      - role: investor
+        jobs:
+          - 一鍵匯入假對帳單並在三秒內看見成果
+          - 檢視資產曲線、XIRR、TWR 與 0050 或 VOO 基準比較
+          - 選擇日期與持股，取得當時的客觀資料摘要
+        permissions:
+          - 讀取自己的投資組合、帳本、績效與報告
+          - 觸發 Demo 匯入與回溯分析
+          - 不可修改或刪除已入帳交易
+    assumptions:
+      - assumption: MVP 使用一位種子 demo 使用者，沒有登入與註冊。
+        impact: 資料仍以 user_id 隔離，正式版再接身分驗證。
+      - assumption: 僅預載 3 至 5 檔台美股 ETF 或個股及其基準的靜態歷史價格。
+        impact: Demo 不呼叫 FMP、Alpha Vantage 或其他即時報價 API。
+      - assumption: 每個投資組合只用 TWD 或 USD 一種計價幣別。
+        impact: 不處理跨幣別匯率與混合幣別績效。
+      - assumption: AI 僅使用授權、帶日期與標的範圍的 CMoney 證據資料。
+        impact: 報告保存來源與法遵結果，禁止建議買進、賣出或持有。
+
+  objects:
+    - name: User
+      description: 資料所有者；MVP 為單一種子使用者。
+      priority: core
+      attributes:
+        - { name: id, type: uuid, required: true, source: system, validation: primary key }
+        - { name: display_name, type: string, required: true, source: user, validation: 1-80 characters }
+        - { name: locale, type: string, required: true, source: system, validation: zh-TW by default }
+      relationships:
+        - { verb: owns, target: Portfolio, cardinality: one-to-many, inverse: belongs_to }
+      lifecycle_states: [{ state: active }]
+      permissions: { create: system seed, read: self, update: self, delete: false }
+
+    - name: Portfolio
+      description: 使用者的帳本範圍、計價幣別與基準設定。
+      priority: core
+      attributes:
+        - { name: id, type: uuid, required: true, source: system, validation: primary key }
+        - { name: user_id, type: uuid, required: true, source: system, validation: references User }
+        - { name: name, type: string, required: true, source: user, validation: 1-80 characters }
+        - { name: base_currency, type: string, required: true, source: user, validation: TWD or USD }
+        - { name: benchmark_symbol, type: string, required: true, source: user, validation: seeded 0050 or VOO }
+      relationships:
+        - { verb: contains, target: LedgerEntry, cardinality: one-to-many, inverse: belongs_to }
+        - { verb: has, target: ImportBatch, cardinality: one-to-many, inverse: imports_into }
+        - { verb: has, target: PortfolioSnapshot, cardinality: one-to-many, inverse: belongs_to }
+        - { verb: has, target: PerformanceMetric, cardinality: one-to-many, inverse: belongs_to }
+        - { verb: has, target: TimeTravelReport, cardinality: one-to-many, inverse: belongs_to }
+      lifecycle_states: [{ state: active }, { state: archived }]
+      permissions: { create: owner, read: owner, update: owner, delete: false }
+
+    - name: ImportBatch
+      description: 一次 Fake Demo 對帳單匯入及 AI 辨識動畫狀態。
+      priority: supporting
+      attributes:
+        - { name: id, type: uuid, required: true, source: system, validation: primary key }
+        - { name: portfolio_id, type: uuid, required: true, source: system, validation: references Portfolio }
+        - { name: source_payload, type: json, required: true, source: external, validation: hardcoded fake-demo JSON }
+        - { name: status, type: string, required: true, source: system, validation: "pending, recognizing, completed, or failed" }
+        - { name: completed_at, type: datetime, required: false, source: system, validation: ISO 8601 }
+      relationships:
+        - { verb: imports_into, target: Portfolio, cardinality: one-to-many, inverse: has }
+        - { verb: creates, target: LedgerEntry, cardinality: one-to-many, inverse: created_by }
+      lifecycle_states: [{ state: pending }, { state: recognizing }, { state: completed }, { state: failed }]
+      permissions: { create: owner, read: owner, update: system status only, delete: false }
+
+    - name: LedgerEntry
+      description: 只增不減的交易與外部現金流事件；可回推任意日期持倉與資產。
+      priority: core
+      attributes:
+        - { name: id, type: uuid, required: true, source: system, validation: primary key }
+        - { name: portfolio_id, type: uuid, required: true, source: system, validation: references Portfolio }
+        - { name: import_batch_id, type: uuid, required: false, source: system, validation: references ImportBatch }
+        - { name: sequence, type: integer, required: true, source: system, validation: unique increasing value per portfolio }
+        - { name: occurred_on, type: date, required: true, source: external, validation: valid transaction date }
+        - { name: entry_type, type: string, required: true, source: external, validation: "buy, sell, cash_deposit, cash_withdrawal, dividend, fee, or reversal" }
+        - { name: security_id, type: uuid, required: false, source: external, validation: required for security events }
+        - { name: quantity, type: "decimal(20,8)", required: false, source: external, validation: positive for buy or sell }
+        - { name: unit_price, type: "decimal(20,8)", required: false, source: external, validation: non-negative when security exists }
+        - { name: gross_cash_amount, type: "decimal(20,4)", required: true, source: external, validation: signed amount in base currency }
+        - { name: fee_amount, type: "decimal(20,4)", required: true, source: external, validation: non-negative default 0 }
+        - { name: reversal_of_entry_id, type: uuid, required: false, source: system, validation: prior entry in same portfolio }
+      relationships:
+        - { verb: belongs_to, target: Portfolio, cardinality: one-to-many, inverse: contains }
+        - { verb: references, target: Security, cardinality: one-to-many, inverse: appears_in }
+        - { verb: created_by, target: ImportBatch, cardinality: one-to-many, inverse: creates }
+      lifecycle_states: [{ state: posted }, { state: reversed_by_later_entry }]
+      permissions: { create: import or append-only correction service, read: owner, update: false, delete: false }
+
+    - name: Security
+      description: Demo 中可交易或作為基準的標的主檔。
+      priority: core
+      attributes:
+        - { name: id, type: uuid, required: true, source: system, validation: primary key }
+        - { name: symbol, type: string, required: true, source: external, validation: unique with market }
+        - { name: market, type: string, required: true, source: external, validation: TW or US }
+        - { name: name, type: string, required: true, source: external, validation: 1-120 characters }
+        - { name: asset_type, type: string, required: true, source: external, validation: "ETF, stock, or benchmark" }
+        - { name: currency, type: string, required: true, source: external, validation: TWD or USD }
+      relationships:
+        - { verb: has, target: MarketPrice, cardinality: one-to-many, inverse: belongs_to }
+        - { verb: has, target: AnalysisEvidence, cardinality: one-to-many, inverse: concerns }
+        - { verb: appears_in, target: LedgerEntry, cardinality: one-to-many, inverse: references }
+        - { verb: has_reports, target: TimeTravelReport, cardinality: one-to-many, inverse: concerns }
+      lifecycle_states: [{ state: active }, { state: retired }]
+      permissions: { create: system seed, read: owner, update: system seed refresh, delete: false }
+
+    - name: MarketPrice
+      description: 歷史估值、TWR 與基準比較所需的預載日收盤價。
+      priority: core
+      attributes:
+        - { name: security_id, type: uuid, required: true, source: external, validation: references Security }
+        - { name: traded_on, type: date, required: true, source: external, validation: unique with security_id }
+        - { name: close_price, type: "decimal(20,8)", required: true, source: external, validation: greater than 0 }
+        - { name: source, type: string, required: true, source: system, validation: seeded_demo }
+      relationships:
+        - { verb: belongs_to, target: Security, cardinality: one-to-many, inverse: has }
+      lifecycle_states: [{ state: available }]
+      permissions: { create: system seed, read: owner, update: system seed refresh, delete: false }
+
+    - name: PortfolioSnapshot
+      description: 由帳本與指定日期價格推導的資產快照，供資產曲線與持倉畫面使用。
+      priority: supporting
+      attributes:
+        - { name: portfolio_id, type: uuid, required: true, source: derived, validation: references Portfolio }
+        - { name: as_of_date, type: date, required: true, source: derived, validation: unique with portfolio_id }
+        - { name: market_value, type: "decimal(20,4)", required: true, source: derived, validation: non-negative }
+        - { name: cash_value, type: "decimal(20,4)", required: true, source: derived, validation: no margin in MVP }
+        - { name: holdings, type: json, required: true, source: derived, validation: "quantity, price, and value by security" }
+      relationships:
+        - { verb: belongs_to, target: Portfolio, cardinality: one-to-many, inverse: has }
+      lifecycle_states: [{ state: calculated }, { state: stale }]
+      permissions: { create: calculation service, read: owner, update: calculation service, delete: calculation service }
+
+    - name: PerformanceMetric
+      description: 同一估值日的 XIRR、TWR 與基準報酬。
+      priority: core
+      attributes:
+        - { name: portfolio_id, type: uuid, required: true, source: derived, validation: references Portfolio }
+        - { name: as_of_date, type: date, required: true, source: derived, validation: unique with portfolio_id }
+        - { name: xirr, type: "decimal(12,8)", required: false, source: derived, validation: null when cash flows do not converge }
+        - { name: twr, type: "decimal(12,8)", required: false, source: derived, validation: null when valuation inputs are absent }
+        - { name: benchmark_return, type: "decimal(12,8)", required: false, source: derived, validation: uses portfolio benchmark over same period }
+        - { name: calculation_version, type: string, required: true, source: system, validation: package and input version }
+      relationships:
+        - { verb: belongs_to, target: Portfolio, cardinality: one-to-many, inverse: has }
+      lifecycle_states: [{ state: calculated }, { state: insufficient_data }]
+      permissions: { create: calculation service, read: owner, update: calculation service, delete: calculation service }
+
+    - name: AnalysisEvidence
+      description: 可回溯至標的與日期的 CMoney 結構化資料與社群文本證據。
+      priority: core
+      attributes:
+        - { name: id, type: uuid, required: true, source: system, validation: primary key }
+        - { name: security_id, type: uuid, required: true, source: external, validation: references Security }
+        - { name: evidence_type, type: string, required: true, source: external, validation: "price_volume, fundamental, institutional_chip, large_holder_chip, or social_discussion" }
+        - { name: observed_on, type: date, required: true, source: external, validation: historical date represented }
+        - { name: source_name, type: string, required: true, source: external, validation: authorized CMoney dataset identifier }
+        - { name: payload, type: json, required: true, source: external, validation: normalized factual fields }
+        - { name: content_text, type: text, required: false, source: external, validation: text for scoped retrieval only }
+      relationships:
+        - { verb: concerns, target: Security, cardinality: one-to-many, inverse: has }
+        - { verb: supports, target: TimeTravelReport, cardinality: many-to-many, inverse: cites }
+      lifecycle_states: [{ state: available }, { state: superseded }]
+      permissions: { create: authorized ingestion service, read: report owner, update: ingestion service, delete: retention service }
+
+    - name: TimeTravelReport
+      description: 特定日期與標的的可稽核 AI 事實摘要及情緒視覺色彩。
+      priority: core
+      attributes:
+        - { name: id, type: uuid, required: true, source: system, validation: primary key }
+        - { name: portfolio_id, type: uuid, required: true, source: system, validation: references Portfolio }
+        - { name: security_id, type: uuid, required: true, source: user, validation: security selected from portfolio context }
+        - { name: as_of_date, type: date, required: true, source: user, validation: historical data date }
+        - { name: sentiment, type: string, required: true, source: derived, validation: "bullish, bearish, or neutral; descriptive only" }
+        - { name: ui_color, type: string, required: true, source: derived, validation: "red, green, or gray" }
+        - { name: summary, type: text, required: true, source: derived, validation: cited facts; no advice or recommendation language }
+        - { name: compliance_status, type: string, required: true, source: system, validation: passed or rejected }
+        - { name: prompt_version, type: string, required: true, source: system, validation: immutable policy identifier }
+      relationships:
+        - { verb: belongs_to, target: Portfolio, cardinality: one-to-many, inverse: has }
+        - { verb: concerns, target: Security, cardinality: one-to-many, inverse: has_reports }
+        - { verb: cites, target: AnalysisEvidence, cardinality: many-to-many, inverse: supports }
+      lifecycle_states: [{ state: generating }, { state: ready }, { state: rejected_by_compliance }, { state: failed }]
+      permissions: { create: analysis service on owner request, read: owner, update: analysis service status only, delete: false }
+
+  ontology:
+    concepts:
+      - { name: immutable ledger, definition: "Posted ledger entries cannot change or disappear; corrections append a reversal", synonyms: [append-only ledger, 不可變帳本] }
+      - { name: external cash flow, definition: "User money entering or leaving the portfolio; not an internal securities trade", synonyms: [cash deposit, cash withdrawal] }
+      - { name: XIRR, definition: Annualized return including external cash-flow timing, synonyms: [extended internal rate of return] }
+      - { name: TWR, definition: Return that links periods split by external cash flows, synonyms: [time-weighted return] }
+      - { name: objective analysis, definition: Evidence-backed fact synthesis with no investment recommendation, synonyms: [客觀降噪報告] }
+    taxonomies:
+      - { name: ledger_entry_type, terms: [buy, sell, cash_deposit, cash_withdrawal, dividend, fee, reversal] }
+      - { name: evidence_type, terms: [price_volume, fundamental, institutional_chip, large_holder_chip, social_discussion] }
+      - { name: sentiment_visual, terms: [bullish_red, bearish_green, neutral_gray] }
+    graph_edges:
+      - { from: User, relation: owns, to: Portfolio }
+      - { from: Portfolio, relation: contains, to: LedgerEntry }
+      - { from: LedgerEntry, relation: references, to: Security }
+      - { from: TimeTravelReport, relation: cites, to: AnalysisEvidence }
+    search:
+      facets: [security symbol, observed date, evidence type, source name]
+      ranking_signals: [exact security match, evidence on or before requested date, structured source before social text]
+    rag:
+      enabled: true
+      chunk_sources: [authorized social discussion text, authorized long-form CMoney research]
+      metadata: [security_id, observed_on, evidence_type, source_name, ingested_at]
+
+  data_model:
+    tables:
+      - name: users
+        object: User
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: display_name, type: varchar(80), constraints: not null }
+          - { name: locale, type: varchar(10), constraints: not null default zh-TW }
+          - { name: created_at, type: timestamptz, constraints: not null }
+        primary_key: id
+        foreign_keys: []
+        indexes: []
+        notes: Seed one demo user.
+      - name: portfolios
+        object: Portfolio
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: user_id, type: uuid, constraints: not null }
+          - { name: name, type: varchar(80), constraints: not null }
+          - { name: base_currency, type: char(3), constraints: TWD or USD }
+          - { name: benchmark_symbol, type: varchar(20), constraints: not null }
+          - { name: status, type: varchar(16), constraints: active or archived }
+        primary_key: id
+        foreign_keys: ["user_id -> users.id"]
+        indexes: [user_id]
+        notes: benchmark must be a seeded security.
+      - name: import_batches
+        object: ImportBatch
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: portfolio_id, type: uuid, constraints: not null }
+          - { name: source_payload, type: jsonb, constraints: not null }
+          - { name: status, type: varchar(16), constraints: not null }
+          - { name: started_at, type: timestamptz, constraints: not null }
+          - { name: completed_at, type: timestamptz, constraints: nullable }
+        primary_key: id
+        foreign_keys: ["portfolio_id -> portfolios.id"]
+        indexes: ["portfolio_id, started_at desc"]
+        notes: Stores only hardcoded Fake Demo input in MVP.
+      - name: securities
+        object: Security
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: symbol, type: varchar(20), constraints: not null }
+          - { name: market, type: varchar(4), constraints: TW or US }
+          - { name: name, type: varchar(120), constraints: not null }
+          - { name: asset_type, type: varchar(16), constraints: "ETF, stock, or benchmark" }
+          - { name: currency, type: char(3), constraints: TWD or USD }
+        primary_key: id
+        foreign_keys: []
+        indexes: ["unique (market, symbol)"]
+        notes: Seed only demo holdings and benchmark assets.
+      - name: ledger_entries
+        object: LedgerEntry
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: portfolio_id, type: uuid, constraints: not null }
+          - { name: import_batch_id, type: uuid, constraints: nullable }
+          - { name: sequence, type: bigint, constraints: not null }
+          - { name: occurred_on, type: date, constraints: not null }
+          - { name: entry_type, type: varchar(20), constraints: not null }
+          - { name: security_id, type: uuid, constraints: nullable }
+          - { name: quantity, type: "numeric(20,8)", constraints: nullable }
+          - { name: unit_price, type: "numeric(20,8)", constraints: nullable }
+          - { name: gross_cash_amount, type: "numeric(20,4)", constraints: not null }
+          - { name: fee_amount, type: "numeric(20,4)", constraints: not null default 0 }
+          - { name: reversal_of_entry_id, type: uuid, constraints: nullable }
+          - { name: created_at, type: timestamptz, constraints: not null }
+        primary_key: id
+        foreign_keys: ["portfolio_id -> portfolios.id", "import_batch_id -> import_batches.id", "security_id -> securities.id", "reversal_of_entry_id -> ledger_entries.id"]
+        indexes: ["unique (portfolio_id, sequence)", "portfolio_id, occurred_on, sequence", "security_id, occurred_on"]
+        notes: DB trigger or policy rejects UPDATE and DELETE; correction creates a reversal row.
+      - name: market_prices
+        object: MarketPrice
+        columns:
+          - { name: security_id, type: uuid, constraints: not null }
+          - { name: traded_on, type: date, constraints: not null }
+          - { name: close_price, type: "numeric(20,8)", constraints: greater than 0 }
+          - { name: source, type: varchar(32), constraints: seeded_demo }
+        primary_key: [security_id, traded_on]
+        foreign_keys: ["security_id -> securities.id"]
+        indexes: [traded_on]
+        notes: Valuation uses the last available price on or before the selected date.
+      - name: portfolio_snapshots
+        object: PortfolioSnapshot
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: portfolio_id, type: uuid, constraints: not null }
+          - { name: as_of_date, type: date, constraints: not null }
+          - { name: market_value, type: "numeric(20,4)", constraints: not null }
+          - { name: cash_value, type: "numeric(20,4)", constraints: not null }
+          - { name: holdings, type: jsonb, constraints: not null }
+          - { name: calculated_at, type: timestamptz, constraints: not null }
+        primary_key: id
+        foreign_keys: ["portfolio_id -> portfolios.id"]
+        indexes: ["unique (portfolio_id, as_of_date)"]
+        notes: Derived cache, invalidated by a new ledger entry or price seed change.
+      - name: performance_metrics
+        object: PerformanceMetric
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: portfolio_id, type: uuid, constraints: not null }
+          - { name: as_of_date, type: date, constraints: not null }
+          - { name: xirr, type: "numeric(12,8)", constraints: nullable }
+          - { name: twr, type: "numeric(12,8)", constraints: nullable }
+          - { name: benchmark_return, type: "numeric(12,8)", constraints: nullable }
+          - { name: calculation_version, type: varchar(80), constraints: not null }
+          - { name: calculated_at, type: timestamptz, constraints: not null }
+        primary_key: id
+        foreign_keys: ["portfolio_id -> portfolios.id"]
+        indexes: ["unique (portfolio_id, as_of_date)"]
+        notes: API returns a warning, not a fabricated number, when inputs are insufficient.
+      - name: analysis_evidence
+        object: AnalysisEvidence
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: security_id, type: uuid, constraints: not null }
+          - { name: evidence_type, type: varchar(32), constraints: not null }
+          - { name: observed_on, type: date, constraints: not null }
+          - { name: source_name, type: varchar(120), constraints: not null }
+          - { name: payload, type: jsonb, constraints: not null }
+          - { name: content_text, type: text, constraints: nullable }
+          - { name: ingested_at, type: timestamptz, constraints: not null }
+        primary_key: id
+        foreign_keys: ["security_id -> securities.id"]
+        indexes: ["security_id, observed_on desc, evidence_type", "source_name, observed_on desc"]
+        notes: Structured facts stay separate from retrieval text.
+      - name: time_travel_reports
+        object: TimeTravelReport
+        columns:
+          - { name: id, type: uuid, constraints: primary key }
+          - { name: portfolio_id, type: uuid, constraints: not null }
+          - { name: security_id, type: uuid, constraints: not null }
+          - { name: as_of_date, type: date, constraints: not null }
+          - { name: sentiment, type: varchar(16), constraints: not null }
+          - { name: ui_color, type: varchar(16), constraints: not null }
+          - { name: summary, type: text, constraints: not null }
+          - { name: compliance_status, type: varchar(16), constraints: not null }
+          - { name: prompt_version, type: varchar(80), constraints: not null }
+          - { name: generated_at, type: timestamptz, constraints: not null }
+        primary_key: id
+        foreign_keys: ["portfolio_id -> portfolios.id", "security_id -> securities.id"]
+        indexes: ["portfolio_id, security_id, as_of_date desc"]
+        notes: Cache only passed reports; retain rejected reports for audit.
+      - name: time_travel_report_evidence
+        object: TimeTravelReport to AnalysisEvidence relation
+        columns:
+          - { name: report_id, type: uuid, constraints: not null }
+          - { name: evidence_id, type: uuid, constraints: not null }
+          - { name: citation_order, type: smallint, constraints: not null }
+        primary_key: [report_id, evidence_id]
+        foreign_keys: ["report_id -> time_travel_reports.id", "evidence_id -> analysis_evidence.id"]
+        indexes: [evidence_id]
+        notes: Every report statement must trace to cited input evidence.
+
+  content_strategy:
+    cms_models: []
+    api_payloads:
+      - name: DemoImportResult
+        purpose: 顯示三秒辨識動畫後導向已完成的投資組合。
+        fields: [import_id, status, portfolio_id, completed_at]
+      - name: Dashboard
+        purpose: 供應資產曲線、持倉、核心績效與基準比較。
+        fields: [portfolio, latest_snapshot, timeline_points, metrics, benchmark, holdings, warnings]
+      - name: TimeTravelReport
+        purpose: 顯示選定日期與標的的可稽核客觀摘要。
+        fields: [report_id, security, as_of_date, sentiment, ui_color, summary, citations, compliance_status]
+    omnichannel_notes: 無 CMS；內容只在帳本儀表板呈現，不能重用為投資推薦素材。
+
+  api:
+    style: rest
+    resources:
+      - name: demo_imports
+        operations:
+          - method: POST
+            path: /api/demo-imports
+            auth: demo user context
+            request: portfolio_id
+            response: DemoImportResult
+            errors: [portfolio_not_found, demo_already_imported]
+          - method: GET
+            path: /api/demo-imports/:importId
+            auth: portfolio owner
+            request: none
+            response: DemoImportResult
+            errors: [import_not_found]
+      - name: portfolio_dashboard
+        operations:
+          - method: GET
+            path: /api/portfolios/:portfolioId/dashboard
+            auth: portfolio owner
+            request: optional as_of_date in YYYY-MM-DD
+            response: Dashboard
+            errors: [invalid_as_of_date, portfolio_not_found, valuation_data_missing]
+      - name: time_travel_reports
+        operations:
+          - method: POST
+            path: /api/portfolios/:portfolioId/time-travel-reports
+            auth: portfolio owner
+            request: security_id and as_of_date
+            response: TimeTravelReport
+            errors: [invalid_request, portfolio_or_security_not_found, historical_evidence_missing, analysis_generation_failed]
+          - method: GET
+            path: /api/time-travel-reports/:reportId
+            auth: portfolio owner
+            request: none
+            response: TimeTravelReport
+            errors: [report_not_found, report_not_ready, report_rejected_by_compliance]
+
+  frontend:
+    routes:
+      - { path: /, view: DemoImportView, data_needed: [default demo portfolio, current import status] }
+      - { path: /portfolios/:portfolioId, view: PortfolioDashboardView, data_needed: [Dashboard] }
+      - { path: /portfolios/:portfolioId/time-travel, view: TimeTravelReportView, data_needed: [security_id, as_of_date, TimeTravelReport] }
+    components:
+      - { name: DemoImportButton, consumes: [POST demo imports], responsibilities: [starts one hardcoded import] }
+      - { name: RecognitionOverlay, consumes: [DemoImportResult status], responsibilities: [shows AI recognition for up to three seconds] }
+      - { name: PerformanceSummary, consumes: [Dashboard metrics], responsibilities: [renders XIRR, TWR, benchmark, warnings] }
+      - { name: AssetTimelineChart, consumes: [Dashboard timeline_points], responsibilities: [renders ECharts curve and emits date and holding selection] }
+      - { name: HoldingsList, consumes: [Dashboard holdings], responsibilities: [shows selected-date quantity, price, and value] }
+      - { name: TimeTravelPanel, consumes: [TimeTravelReport API], responsibilities: [loads report for selected date and security] }
+      - { name: ObjectiveAnalysisReport, consumes: [TimeTravelReport], responsibilities: [shows citations and color without recommendation language] }
+    state:
+      server_state: [dashboard by portfolio and date, import by id, report by id]
+      client_state: [selected timeline date, selected security, import overlay visibility]
+      loading_empty_error:
+        - loading: SSR dashboard skeleton; import overlay; report panel spinner
+        - empty: no import yet; show only the Fake Demo action
+        - error: retain last dashboard and allow retry for import or report failure
+    navigation: Import -> dashboard -> select date and holding -> time-travel report -> dashboard.
+
+  build_sequence:
+    - step: Seed demo user, securities, static prices, CMoney evidence, and hardcoded import JSON.
+      output: Reproducible local dataset.
+      verify: Every ledger security and valuation date resolves to seeded price data.
+    - step: Create PostgreSQL schema and append-only ledger write path.
+      output: Import batches and immutable ledger entries.
+      verify: UPDATE and DELETE fail; a correction appends a reversal entry.
+    - step: Calculate snapshots, XIRR with node-irr, TWR with "@railpath/finance-toolkit", and benchmark return.
+      output: Dashboard payload with timeline and metrics.
+      verify: Fixed fixture produces expected returns; insufficient input returns a warning.
+    - step: Build Vue SSR import and dashboard flow.
+      output: Three-second recognition flow, metrics, holdings, and ECharts timeline.
+      verify: One click reaches a populated dashboard without external quote calls.
+    - step: Add Bedrock time-travel synthesis, citations, and compliance gate.
+      output: Color-coded factual report for selected date and security.
+      verify: Report cites only evidence on or before as_of_date and rejects investment advice.
+
+  open_decisions:
+    - question: 正式版是否支援登入、多使用者與多投資組合？
+      default: 一位種子使用者與一個 demo 投資組合。
+      reason: 兩天 Hackathon 的核心是展示匯入到決策守護流程。
+    - question: 正式帳本需支援哪些交易事件與更正規則？
+      default: 買賣、存提、股利、費用與 reversal。
+      reason: 拆分、融資、稅費與配息再投入會改變績效語義。
+    - question: 是否支援跨幣別與匯率？
+      default: 每個投資組合只用一種計價幣別。
+      reason: 匯率來源與估值時點會實質改變 XIRR/TWR。
+    - question: CMoney 與 Bedrock 資料授權、保留期與刷新頻率為何？
+      default: 僅載入授權的近一年 demo 資料，記錄來源與匯入時間。
+      reason: 條件決定 evidence schema、RAG 索引與稽核責任。
+    - question: 法遵 gate 的禁止詞與人工覆核規則為何？
+      default: 阻擋買進、賣出、持有及同義推薦語；只發布 passed 報告。
+      reason: 視覺情緒仍不可被解讀為個別投資建議。
