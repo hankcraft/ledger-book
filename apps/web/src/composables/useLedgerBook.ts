@@ -10,7 +10,7 @@ import {
   type TimeTravelReportRequest,
 } from "@ledger-book/contracts";
 
-import { requestJson } from "../lib/api";
+import { ApiRequestError, requestJson } from "../lib/api";
 
 type DashboardPhase = "idle" | "loading" | "refreshing";
 type ReportPhase = "error" | "idle" | "loading";
@@ -28,6 +28,7 @@ function wait(milliseconds: number): Promise<void> {
 export function useLedgerBook() {
   const dashboard = shallowRef<Dashboard | null>(null);
   const dashboardError = shallowRef<string | null>(null);
+  const dashboardFocusRequested = shallowRef(false);
   const dashboardPhase = shallowRef<DashboardPhase>("loading");
   const importing = shallowRef(false);
   const importError = shallowRef<string | null>(null);
@@ -104,6 +105,7 @@ export function useLedgerBook() {
     importing.value = true;
     importError.value = null;
     const request: DemoImportRequest = { portfolioId: DEMO_PORTFOLIO_ID };
+    const controller = new AbortController();
 
     try {
       const result = await Promise.race([
@@ -113,9 +115,11 @@ export function useLedgerBook() {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(request),
+            signal: controller.signal,
           }),
         ]).then(([, response]) => response),
         wait(3_000).then(() => {
+          controller.abort();
           throw new Error("匯入逾時，請再試一次。");
         }),
       ]);
@@ -125,7 +129,14 @@ export function useLedgerBook() {
       }
 
       await loadDashboard();
+      dashboardFocusRequested.value = readyDashboard.value !== null;
     } catch (error) {
+      if (error instanceof ApiRequestError && error.code === "demo_already_imported") {
+        await loadDashboard();
+        dashboardFocusRequested.value = readyDashboard.value !== null;
+        return;
+      }
+
       importError.value = errorMessage(error);
     } finally {
       importing.value = false;
@@ -200,6 +211,10 @@ export function useLedgerBook() {
     dashboard: computed(() => dashboard.value),
     dashboardBusy,
     dashboardError: computed(() => dashboardError.value),
+    dashboardFocusRequested: computed(() => dashboardFocusRequested.value),
+    clearDashboardFocusRequest: () => {
+      dashboardFocusRequested.value = false;
+    },
     importDemo,
     importPhase,
     landingError,

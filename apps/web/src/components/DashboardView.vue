@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useTemplateRef } from "vue";
 
 import type { Holding, ReadyDashboard, TimeTravelReport } from "@ledger-book/contracts";
 
@@ -32,6 +32,14 @@ const selectedHolding = computed<Holding | null>(
     props.dashboard.holdings.find((holding) => holding.securityId === props.selectedSecurityId) ??
     null,
 );
+
+const heading = useTemplateRef<HTMLHeadingElement>("heading");
+
+function focusHeading(): void {
+  heading.value?.focus();
+}
+
+defineExpose({ focusHeading });
 </script>
 
 <template>
@@ -41,7 +49,7 @@ const selectedHolding = computed<Holding | null>(
         <p class="eyebrow">
           {{ dashboard.portfolio.benchmarkSymbol }} 基準 · {{ dashboard.portfolio.baseCurrency }}
         </p>
-        <h1>{{ dashboard.portfolio.name }}</h1>
+        <h1 ref="heading" tabindex="-1">{{ dashboard.portfolio.name }}</h1>
       </div>
       <button
         class="refresh"
@@ -90,8 +98,8 @@ const selectedHolding = computed<Holding | null>(
   display: flex;
   align-items: end;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .dashboard-header h1,
@@ -100,35 +108,46 @@ const selectedHolding = computed<Holding | null>(
 }
 
 .dashboard-header h1 {
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
   color: var(--ink);
-  font-family: "Iowan Old Style", "Noto Serif TC", serif;
-  font-size: clamp(2rem, 7vw, 3.5rem);
+  font-size: var(--text-heading);
   font-weight: 600;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.02em;
+  line-height: 1.5;
 }
 
 .eyebrow {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .refresh {
   flex: 0 0 auto;
-  border: 1px solid var(--ink);
-  border-radius: 0;
-  padding: 0.5rem 0.75rem;
-  color: var(--ink);
-  background: transparent;
-  font-size: 0.875rem;
+  border: 1px solid var(--action-primary);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-4);
+  color: var(--action-primary);
+  background: var(--surface);
+  font-size: var(--text-meta);
   font-weight: 700;
+  transition:
+    background 120ms ease-out,
+    color 120ms ease-out,
+    transform 80ms ease-out;
 }
 
-.refresh:hover:not(:disabled) {
-  color: var(--surface);
-  background: var(--ink);
+@media (hover: hover) {
+  .refresh:hover:not(:disabled) {
+    color: var(--on-ink);
+    background: var(--action-primary);
+  }
+}
+
+.refresh:active:not(:disabled) {
+  background: var(--action-active);
+  transform: scale(0.98);
 }
 
 .refresh:disabled {
@@ -137,15 +156,19 @@ const selectedHolding = computed<Holding | null>(
 }
 
 .dashboard-error {
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-control);
   color: var(--danger);
-  font-size: 0.875rem;
+  background: var(--danger-subtle);
+  font-size: var(--text-meta);
 }
 
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 @media (min-width: 60rem) {

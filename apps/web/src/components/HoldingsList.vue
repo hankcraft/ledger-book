@@ -51,9 +51,11 @@ function changeClass(value: number): string {
 
 <style scoped>
 .holdings-list {
-  padding: 1.5rem;
+  padding: var(--space-6);
   border: 1px solid var(--line);
+  border-radius: var(--radius-card);
   background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .section-heading h2,
@@ -62,24 +64,24 @@ function changeClass(value: number): string {
 }
 
 .section-heading h2 {
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
   color: var(--ink);
-  font-family: "Iowan Old Style", "Noto Serif TC", serif;
-  font-size: 1.5rem;
+  font-size: var(--text-heading);
   font-weight: 600;
+  line-height: 1.5;
 }
 
 .eyebrow {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .holdings {
   display: grid;
-  gap: 0.5rem;
-  margin: 1.25rem 0 0;
+  gap: var(--space-2);
+  margin: var(--space-6) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -89,31 +91,45 @@ function changeClass(value: number): string {
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   border: 1px solid var(--line);
-  border-radius: 0;
-  padding: 0.875rem;
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
   color: var(--ink);
   background: var(--surface);
   text-align: left;
+  transition:
+    background 120ms ease-out,
+    border-color 120ms ease-out,
+    transform 80ms ease-out;
 }
 
-.holding:hover,
 .holding--selected {
-  border-color: var(--ink);
-  background: var(--canvas);
+  border-color: var(--accent);
+  background: var(--primary-subtle);
+}
+
+@media (hover: hover) {
+  .holding:hover {
+    border-color: var(--accent);
+    background: var(--primary-subtle);
+  }
+}
+
+.holding:active {
+  transform: scale(0.99);
 }
 
 .holding-identity,
 .holding-value {
   display: grid;
-  gap: 0.1875rem;
+  gap: var(--space-1);
 }
 
 .holding-identity span,
 .holding-value span {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-meta);
 }
 
 .holding-value {

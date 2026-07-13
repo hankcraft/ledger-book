@@ -40,9 +40,11 @@ const metricItems = computed(() => [
 
 <style scoped>
 .performance-summary {
-  padding: 1.5rem;
+  padding: var(--space-6);
   border: 1px solid var(--line);
+  border-radius: var(--radius-card);
   background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .section-heading h2,
@@ -51,30 +53,30 @@ const metricItems = computed(() => [
 }
 
 .section-heading h2 {
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
   color: var(--ink);
-  font-family: "Iowan Old Style", "Noto Serif TC", serif;
-  font-size: 1.5rem;
+  font-size: var(--text-heading);
   font-weight: 600;
+  line-height: 1.5;
 }
 
 .eyebrow {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 1.5rem 0 0;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 0;
 }
 
 .metric {
   min-width: 0;
-  padding-top: 0.75rem;
+  padding-top: var(--space-3);
   border-top: 1px solid var(--line);
 }
 
@@ -86,32 +88,32 @@ const metricItems = computed(() => [
 
 .metric dt {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-meta);
   font-weight: 700;
 }
 
 .metric dd {
-  margin-top: 0.375rem;
+  margin-top: var(--space-2);
   color: var(--ink);
-  font-size: clamp(1.125rem, 4vw, 1.875rem);
+  font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
 }
 
 .metric p {
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
   color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--text-meta);
+  line-height: 1.5;
 }
 
 .warnings {
-  margin: 1.25rem 0 0;
-  padding: 0.75rem 0 0 1.25rem;
+  margin: var(--space-6) 0 0;
+  padding: var(--space-3) 0 0 var(--space-6);
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-meta);
   line-height: 1.5;
 }
 

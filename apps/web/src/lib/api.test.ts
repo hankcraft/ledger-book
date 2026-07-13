@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { ApiRequestError, requestJson } from "./api";
+import { requestJson } from "./api";
 
 const originalFetch = Object.getOwnPropertyDescriptor(globalThis, "fetch");
 
@@ -27,15 +27,17 @@ describe("requestJson", () => {
     });
   });
 
-  test("uses the API error message when a request fails", async () => {
+  test("keeps the API error code for recovery flows", async () => {
     mockFetch(
       new Response(JSON.stringify({ code: "demo_already_imported", message: "示範資料已匯入。" }), {
         status: 409,
       }),
     );
 
-    await expect(requestJson("/api/demo-imports")).rejects.toEqual(
-      new ApiRequestError("示範資料已匯入。", 409),
-    );
+    await expect(requestJson("/api/demo-imports")).rejects.toMatchObject({
+      code: "demo_already_imported",
+      message: "示範資料已匯入。",
+      status: 409,
+    });
   });
 });

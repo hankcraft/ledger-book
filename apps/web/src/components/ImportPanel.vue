@@ -17,15 +17,24 @@ const emit = defineEmits<{
     <h1 class="title">看清投資旅程，少一點焦慮。</h1>
     <p class="lede">匯入固定示範資料，查看真實資產變化、持倉與指定時點的客觀資料整理。</p>
 
-    <div v-if="phase === 'recognizing'" class="recognition" role="status">
+    <button
+      class="import-button"
+      type="button"
+      :disabled="phase !== 'empty'"
+      @click="emit('import')"
+    >
+      {{ phase === "empty" ? "匯入示範對帳資料" : "正在匯入示範資料" }}
+    </button>
+
+    <div v-if="phase === 'recognizing'" class="recognition" role="status" aria-live="polite">
       <span class="scan-mark" aria-hidden="true"></span>
       <div>
-        <strong>AI 正在辨識示範對帳資料</strong>
+        <strong>正在建立示範帳本</strong>
         <p>建立不可變交易帳本與績效快照。</p>
       </div>
     </div>
 
-    <div v-else-if="phase === 'loading'" class="recognition" role="status">
+    <div v-else-if="phase === 'loading'" class="recognition" role="status" aria-live="polite">
       <span class="scan-mark scan-mark--still" aria-hidden="true"></span>
       <div>
         <strong>讀取帳本狀態</strong>
@@ -34,7 +43,6 @@ const emit = defineEmits<{
     </div>
 
     <template v-else>
-      <button class="import-button" type="button" @click="emit('import')">匯入示範對帳資料</button>
       <p class="hint">不需上傳真實資料。示範使用台股 2330、00878 與 0050 基準。</p>
     </template>
 
@@ -45,54 +53,72 @@ const emit = defineEmits<{
 <style scoped>
 .import-panel {
   width: min(100%, 43rem);
-  padding: 2rem;
+  padding: var(--space-8);
   border: 1px solid var(--line);
+  border-top: 4px solid var(--brand-surface);
+  border-radius: var(--radius-card);
   background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .eyebrow {
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-3);
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-meta);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .title {
   max-width: 12ch;
   margin: 0;
   color: var(--ink);
-  font-family: "Iowan Old Style", "Noto Serif TC", serif;
-  font-size: clamp(2.25rem, 8vw, 4.5rem);
+  font-size: var(--text-heading);
   font-weight: 600;
-  letter-spacing: -0.045em;
-  line-height: 1.02;
+  letter-spacing: -0.02em;
+  line-height: 1.5;
 }
 
 .lede {
   max-width: 34rem;
-  margin: 1.5rem 0 2rem;
+  margin: var(--space-6) 0 var(--space-8);
   color: var(--muted);
-  font-size: 1rem;
-  line-height: 1.7;
+  font-size: var(--text-body);
+  line-height: 1.5;
 }
 
 .import-button {
   border: 0;
-  padding: 0.875rem 1rem;
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-4);
   color: var(--on-ink);
-  background: var(--ink);
+  background: var(--action-primary);
   font-weight: 700;
+  transition:
+    background 120ms ease-out,
+    opacity 120ms ease-out,
+    transform 80ms ease-out;
 }
 
-.import-button:hover {
-  background: var(--ink-hover);
+@media (hover: hover) {
+  .import-button:hover:not(:disabled) {
+    background: var(--action-hover);
+  }
+}
+
+.import-button:active:not(:disabled) {
+  background: var(--action-active);
+  transform: scale(0.98);
+}
+
+.import-button:disabled {
+  opacity: 0.7;
 }
 
 .hint,
 .error {
-  margin: 0.875rem 0 0;
-  font-size: 0.875rem;
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-meta);
   line-height: 1.5;
 }
 
@@ -107,11 +133,12 @@ const emit = defineEmits<{
 .recognition {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   min-height: 5.5rem;
-  padding: 1rem;
-  border: 1px solid var(--line);
-  background: var(--canvas);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--primary-subtle);
 }
 
 .recognition strong,
@@ -121,9 +148,9 @@ const emit = defineEmits<{
 }
 
 .recognition p {
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--text-meta);
 }
 
 .scan-mark {
@@ -148,7 +175,7 @@ const emit = defineEmits<{
 
 @media (min-width: 48rem) {
   .import-panel {
-    padding: 3.5rem;
+    padding: calc(var(--space-8) * 1.5);
   }
 }
 </style>

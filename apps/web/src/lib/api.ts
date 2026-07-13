@@ -4,6 +4,7 @@ export class ApiRequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -26,8 +27,12 @@ export async function requestJson<T>(input: RequestInfo | URL, init?: RequestIni
   const payload: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message = isApiError(payload) ? payload.message : "服務暫時無法回應，請再試一次。";
-    throw new ApiRequestError(message, response.status);
+    const error = isApiError(payload) ? payload : undefined;
+    throw new ApiRequestError(
+      error?.message ?? "服務暫時無法回應，請再試一次。",
+      response.status,
+      error?.code,
+    );
   }
 
   return payload as T;
