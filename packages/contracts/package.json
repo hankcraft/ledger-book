@@ -1,0 +1,9 @@
+{
+  "name": "@ledger-book/contracts",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
