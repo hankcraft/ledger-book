@@ -13,6 +13,8 @@ import {
 import { Elysia, t } from "elysia";
 import { convertRate, xirr } from "node-irr";
 
+import demoLedgerCsv from "./data/demo-ledger.csv" with { type: "text" };
+
 const portfolio: PortfolioSummary = {
   id: DEMO_PORTFOLIO_ID,
   name: "台股核心－衛星帳本",
@@ -21,63 +23,92 @@ const portfolio: PortfolioSummary = {
 };
 
 const securities = [
-  { id: "2330", symbol: "2330", name: "台積電" },
+  { id: "0050", symbol: "0050", name: "元大台灣50" },
   { id: "00878", symbol: "00878", name: "國泰永續高股息" },
+  { id: "2330", symbol: "2330", name: "台積電" },
+  { id: "2317", symbol: "2317", name: "鴻海" },
+  { id: "2454", symbol: "2454", name: "聯發科" },
+  { id: "2308", symbol: "2308", name: "台達電" },
+  { id: "2881", symbol: "2881", name: "富邦金" },
 ] as const;
 
 type SecurityId = (typeof securities)[number]["id"];
 
 interface Price {
-  symbol: SecurityId | "0050";
+  symbol: SecurityId;
   date: string;
   close: number;
 }
 
 const prices: readonly Price[] = [
-  { symbol: "2330", date: "2024-01-02", close: 600 },
-  { symbol: "00878", date: "2024-01-02", close: 20 },
   { symbol: "0050", date: "2024-01-02", close: 145 },
-  { symbol: "2330", date: "2024-06-28", close: 950 },
-  { symbol: "00878", date: "2024-06-28", close: 22.5 },
-  { symbol: "0050", date: "2024-06-28", close: 180 },
-  { symbol: "2330", date: "2024-12-31", close: 1075 },
-  { symbol: "00878", date: "2024-12-31", close: 21.8 },
-  { symbol: "0050", date: "2024-12-31", close: 190 },
+  { symbol: "00878", date: "2024-01-02", close: 20.5 },
+  { symbol: "2330", date: "2024-01-02", close: 590 },
+  { symbol: "2317", date: "2024-01-02", close: 102 },
+  { symbol: "2454", date: "2024-01-02", close: 900 },
+  { symbol: "2308", date: "2024-01-02", close: 320 },
+  { symbol: "2881", date: "2024-01-02", close: 60 },
+  { symbol: "0050", date: "2024-04-30", close: 166 },
+  { symbol: "00878", date: "2024-04-30", close: 21.8 },
+  { symbol: "2330", date: "2024-04-30", close: 780 },
+  { symbol: "2317", date: "2024-04-30", close: 164 },
+  { symbol: "2454", date: "2024-04-30", close: 1_000 },
+  { symbol: "2308", date: "2024-04-30", close: 360 },
+  { symbol: "2881", date: "2024-04-30", close: 65 },
+  { symbol: "0050", date: "2024-08-30", close: 185 },
+  { symbol: "00878", date: "2024-08-30", close: 22.1 },
+  { symbol: "2330", date: "2024-08-30", close: 970 },
+  { symbol: "2317", date: "2024-08-30", close: 185 },
+  { symbol: "2454", date: "2024-08-30", close: 1_200 },
+  { symbol: "2308", date: "2024-08-30", close: 430 },
+  { symbol: "2881", date: "2024-08-30", close: 70 },
+  { symbol: "0050", date: "2024-12-31", close: 192 },
+  { symbol: "00878", date: "2024-12-31", close: 21.7 },
+  { symbol: "2330", date: "2024-12-31", close: 1_060 },
+  { symbol: "2317", date: "2024-12-31", close: 180 },
+  { symbol: "2454", date: "2024-12-31", close: 1_350 },
+  { symbol: "2308", date: "2024-12-31", close: 480 },
+  { symbol: "2881", date: "2024-12-31", close: 67 },
+  { symbol: "0050", date: "2025-03-31", close: 178 },
+  { symbol: "00878", date: "2025-03-31", close: 20.7 },
+  { symbol: "2330", date: "2025-03-31", close: 960 },
+  { symbol: "2317", date: "2025-03-31", close: 150 },
+  { symbol: "2454", date: "2025-03-31", close: 1_250 },
+  { symbol: "2308", date: "2025-03-31", close: 460 },
+  { symbol: "2881", date: "2025-03-31", close: 63 },
+  { symbol: "0050", date: "2025-06-30", close: 194 },
+  { symbol: "00878", date: "2025-06-30", close: 21.3 },
+  { symbol: "2330", date: "2025-06-30", close: 1_080 },
+  { symbol: "2317", date: "2025-06-30", close: 165 },
+  { symbol: "2454", date: "2025-06-30", close: 1_450 },
+  { symbol: "2308", date: "2025-06-30", close: 520 },
+  { symbol: "2881", date: "2025-06-30", close: 69 },
+  { symbol: "0050", date: "2025-09-30", close: 202 },
+  { symbol: "00878", date: "2025-09-30", close: 21.8 },
+  { symbol: "2330", date: "2025-09-30", close: 1_200 },
+  { symbol: "2317", date: "2025-09-30", close: 185 },
+  { symbol: "2454", date: "2025-09-30", close: 1_600 },
+  { symbol: "2308", date: "2025-09-30", close: 570 },
+  { symbol: "2881", date: "2025-09-30", close: 74 },
+  { symbol: "0050", date: "2025-12-31", close: 210 },
+  { symbol: "00878", date: "2025-12-31", close: 22.5 },
+  { symbol: "2330", date: "2025-12-31", close: 1_350 },
+  { symbol: "2317", date: "2025-12-31", close: 200 },
+  { symbol: "2454", date: "2025-12-31", close: 1_800 },
+  { symbol: "2308", date: "2025-12-31", close: 620 },
+  { symbol: "2881", date: "2025-12-31", close: 80 },
 ];
+
+type LedgerKind = "cash_deposit" | "cash_dividend" | "buy" | "sell";
 
 interface LedgerEntry {
   id: string;
   occurredOn: string;
-  kind: "cash_deposit" | "buy";
+  kind: LedgerKind;
   amount: number;
   securityId?: SecurityId;
   quantity?: number;
 }
-
-const demoLedger: readonly LedgerEntry[] = [
-  {
-    id: "entry-1",
-    occurredOn: "2024-01-02",
-    kind: "cash_deposit",
-    amount: 100_000,
-  },
-  {
-    id: "entry-2",
-    occurredOn: "2024-01-02",
-    kind: "buy",
-    amount: -30_000,
-    securityId: "2330",
-    quantity: 50,
-  },
-  {
-    id: "entry-3",
-    occurredOn: "2024-01-02",
-    kind: "buy",
-    amount: -20_000,
-    securityId: "00878",
-    quantity: 1_000,
-  },
-];
 
 interface Evidence extends EvidenceCitation {
   securityId: SecurityId;
@@ -147,6 +178,55 @@ function isSecurityId(value: string): value is SecurityId {
   return securities.some((security) => security.id === value);
 }
 
+function isLedgerKind(value: string): value is LedgerKind {
+  return ["cash_deposit", "cash_dividend", "buy", "sell"].includes(value);
+}
+
+function parseDemoLedger(csv: string): readonly LedgerEntry[] {
+  const [header, ...rows] = csv.trim().split(/\r?\n/);
+  if (header !== "id,occurred_on,kind,amount,security_id,quantity") {
+    throw new Error("Demo ledger CSV header is invalid.");
+  }
+
+  return rows.map((row) => {
+    const [id = "", occurredOn = "", kind = "", amount = "", securityId = "", quantity = ""] =
+      row.split(",");
+    const parsedAmount = Number(amount);
+    const parsedSecurityId =
+      securityId === "" ? undefined : isSecurityId(securityId) ? securityId : undefined;
+    const parsedQuantity = quantity === "" ? undefined : Number(quantity);
+
+    if (
+      !id ||
+      !occurredOn ||
+      !kind ||
+      !isIsoDate(occurredOn) ||
+      !isLedgerKind(kind) ||
+      !Number.isFinite(parsedAmount) ||
+      (securityId !== "" && parsedSecurityId === undefined) ||
+      (parsedQuantity !== undefined &&
+        (!Number.isInteger(parsedQuantity) || parsedQuantity <= 0)) ||
+      ((kind === "buy" || kind === "sell") &&
+        (parsedSecurityId === undefined || parsedQuantity === undefined)) ||
+      (kind === "cash_deposit" && parsedSecurityId !== undefined)
+    ) {
+      throw new Error(`Demo ledger CSV row is invalid: ${row}`);
+    }
+
+    const entry: LedgerEntry = {
+      id,
+      occurredOn,
+      kind,
+      amount: parsedAmount,
+    };
+    if (parsedSecurityId !== undefined) entry.securityId = parsedSecurityId;
+    if (parsedQuantity !== undefined) entry.quantity = parsedQuantity;
+    return entry;
+  });
+}
+
+const demoLedger = parseDemoLedger(demoLedgerCsv);
+
 export interface DemoStore {
   importDemo(): DemoImportResult | undefined;
   getImport(importId: string): DemoImportResult | undefined;
@@ -165,21 +245,29 @@ export function createDemoStore(): DemoStore {
 
   function getHoldings(asOfDate: string): Holding[] | undefined {
     const holdings: Array<Holding | undefined> = securities.map((security) => {
-      const entry = entries.find(
-        (candidate) => candidate.kind === "buy" && candidate.securityId === security.id,
-      );
+      const quantity = entries
+        .filter(
+          (entry) =>
+            entry.occurredOn <= asOfDate &&
+            entry.securityId === security.id &&
+            (entry.kind === "buy" || entry.kind === "sell"),
+        )
+        .reduce(
+          (total, entry) => total + (entry.kind === "buy" ? entry.quantity! : -entry.quantity!),
+          0,
+        );
       const current = priceOnOrBefore(security.id, asOfDate);
       const initial = priceOnOrBefore(security.id, "2024-01-02");
 
-      if (!entry?.quantity || !current || !initial) return undefined;
+      if (quantity <= 0 || !current || !initial) return undefined;
 
       return {
         securityId: security.id,
         symbol: security.symbol,
         name: security.name,
-        quantity: entry.quantity,
+        quantity,
         unitPrice: current.close,
-        marketValue: entry.quantity * current.close,
+        marketValue: quantity * current.close,
         changePercent: current.close / initial.close - 1,
       };
     });
@@ -198,17 +286,22 @@ export function createDemoStore(): DemoStore {
     const holdings = getHoldings(asOfDate);
     if (!holdings) return undefined;
 
-    const cash = entries.reduce((total, entry) => total + entry.amount, 0);
+    const initialInvestment = entries
+      .filter((entry) => entry.kind === "cash_deposit" && entry.occurredOn <= asOfDate)
+      .reduce((total, entry) => total + entry.amount, 0);
     const timeline = dates.map((date) => {
       const pointHoldings = getHoldings(date);
       const benchmark = priceOnOrBefore("0050", date);
+      const cash = entries
+        .filter((entry) => entry.occurredOn <= date)
+        .reduce((total, entry) => total + entry.amount, 0);
       if (!pointHoldings || !benchmark) return undefined;
 
       return {
         date,
         marketValue:
           cash + pointHoldings.reduce((total, holding) => total + holding.marketValue, 0),
-        benchmarkValue: 100_000 * (benchmark.close / initialBenchmark.close),
+        benchmarkValue: initialInvestment * (benchmark.close / initialBenchmark.close),
       };
     });
 
@@ -220,15 +313,23 @@ export function createDemoStore(): DemoStore {
     const firstPoint = readyTimeline[0];
     if (!firstPoint || !finalPoint) return undefined;
 
+    const xirrCashFlows = entries
+      .filter((entry) => entry.kind === "cash_deposit" && entry.occurredOn <= asOfDate)
+      .map((entry) => ({ amount: -entry.amount, date: entry.occurredOn }));
     const metrics: PerformanceMetrics = {
-      xirr: calculateAnnualXirr([
-        { amount: -100_000, date: "2024-01-02" },
-        { amount: finalPoint.marketValue, date: finalPoint.date },
-      ]),
-      twr: calculateTwr(
-        readyTimeline.map((point) => point.marketValue),
-        readyTimeline.map(() => 0),
-      ),
+      xirr: xirrCashFlows.some((cashFlow) => cashFlow.date < finalPoint.date)
+        ? calculateAnnualXirr([
+            ...xirrCashFlows,
+            { amount: finalPoint.marketValue, date: finalPoint.date },
+          ])
+        : 0,
+      twr:
+        readyTimeline.length > 1
+          ? calculateTwr(
+              readyTimeline.map((point) => point.marketValue),
+              readyTimeline.map(() => 0),
+            )
+          : 0,
       benchmarkReturn: finalPoint.benchmarkValue / firstPoint.benchmarkValue - 1,
     };
 
@@ -253,7 +354,7 @@ export function createDemoStore(): DemoStore {
         importId: "demo-import-1",
         portfolioId: DEMO_PORTFOLIO_ID,
         status: "completed",
-        completedAt: "2024-12-31T08:00:00.000Z",
+        completedAt: "2025-12-31T08:00:00.000Z",
       };
       return importResult;
     },
@@ -336,7 +437,7 @@ export function createApp(store = createDemoStore()) {
           return error("portfolio_not_found", "找不到投資組合。");
         }
 
-        const asOfDate = query.asOfDate ?? "2024-12-31";
+        const asOfDate = query.asOfDate ?? "2025-12-31";
         if (!isIsoDate(asOfDate)) {
           set.status = 400;
           return error("invalid_as_of_date", "asOfDate 必須是 YYYY-MM-DD。");

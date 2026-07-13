@@ -43,7 +43,7 @@ describe("demo API", () => {
     expect(await response.json()).toMatchObject({ state: "empty" });
   });
 
-  test("imports once and exposes a populated dashboard", async () => {
+  test("imports a two-year, seven-ticker trading ledger", async () => {
     const app = createApp();
 
     const first = await app.handle(importRequest());
@@ -56,19 +56,40 @@ describe("demo API", () => {
     const dashboard = await app.handle(
       new Request(`http://localhost/api/portfolios/${DEMO_PORTFOLIO_ID}/dashboard`),
     );
-    expect(await dashboard.json()).toMatchObject({
-      state: "ready",
-      holdings: [{ symbol: "2330" }, { symbol: "00878" }],
-    });
+    const body = (await dashboard.json()) as { asOfDate: string; holdings: { symbol: string }[] };
+
+    expect(body.asOfDate).toBe("2025-12-31");
+    expect(body.holdings.map((holding) => holding.symbol)).toEqual([
+      "0050",
+      "00878",
+      "2330",
+      "2317",
+      "2454",
+      "2308",
+      "2881",
+    ]);
+
+    const opening = await app.handle(
+      new Request(
+        `http://localhost/api/portfolios/${DEMO_PORTFOLIO_ID}/dashboard?asOfDate=2024-01-02`,
+      ),
+    );
+    expect(opening.status).toBe(200);
+    expect(await opening.json()).toMatchObject({ state: "ready", metrics: { twr: 0, xirr: 0 } });
   });
 
-  test("keeps ledger reads immutable", () => {
+  test("keeps two years of trading activity immutable", () => {
     const store = createDemoStore();
     store.importDemo();
     const entries = store.getLedgerEntries();
 
     expect(Object.isFrozen(entries)).toBe(true);
     expect(Object.isFrozen(entries[0]!)).toBe(true);
+    expect(new Set(entries.flatMap((entry) => entry.securityId ?? [])).size).toBe(7);
+    expect(entries[0]?.occurredOn).toBe("2024-01-02");
+    expect(entries.at(-1)?.occurredOn).toBe("2025-12-22");
+    expect(entries.some((entry) => entry.kind === "sell")).toBe(true);
+    expect(entries.some((entry) => entry.kind === "cash_dividend")).toBe(true);
   });
 
   test("returns only dated evidence and rejects advice wording", async () => {

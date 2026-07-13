@@ -26,7 +26,7 @@
 ### 2.1 零摩擦庫存匯入 (Low-Friction Ingestion)
 
 * 
-**Fake Demo 體驗**：針對 Hackathon 展示，實作一鍵匯入假對帳單（Hardcoded JSON）的流程，前端顯示「AI 辨識中」動畫，三秒內即可看到價值，完美迴避 OCR 的高風險與繁瑣操作 。
+**Fake Demo 體驗**：針對 Hackathon 展示，實作一鍵匯入固定 CSV 對帳單的流程，前端顯示「AI 辨識中」動畫，三秒內即可看到價值，完美迴避 OCR 的高風險與繁瑣操作 。
 
 
 * 

@@ -43,7 +43,7 @@ const emit = defineEmits<{
     </div>
 
     <template v-else>
-      <p class="hint">不需上傳真實資料。示範使用台股 2330、00878 與 0050 基準。</p>
+      <p class="hint">不需上傳真實資料。示範帳本涵蓋 7 檔台股、兩年交易與股利。</p>
     </template>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
