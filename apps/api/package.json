@@ -1,0 +1,17 @@
+{
+  "name": "@ledger-book/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ledger-book/contracts": "workspace:*",
+    "@railpath/finance-toolkit": "0.5.4",
+    "elysia": "1.4.29",
+    "node-irr": "2.0.5"
+  }
+}
