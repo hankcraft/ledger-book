@@ -1,0 +1,5 @@
+{
+  "$schema": "https://likec4.dev/schemas/config.json",
+  "name": "ledger-book-architecture",
+  "title": "股票帳本 Ledger Book"
+}
