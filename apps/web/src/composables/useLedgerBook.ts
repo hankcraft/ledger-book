@@ -191,7 +191,7 @@ export function useLedgerBook() {
   }
 
   async function selectHolding(securityId: string): Promise<void> {
-    if (securityId.length === 0) {
+    if (securityId.length === 0 || securityId === selectedSecurityId.value) {
       return;
     }
 

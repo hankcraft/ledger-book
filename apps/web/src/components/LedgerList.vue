@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import type { LedgerEntry, LedgerEntryType } from "@ledger-book/contracts";
+import { computed } from "vue";
 
-import { formatCurrency, formatDate } from "../lib/format";
+import type { Holding, LedgerEntry, LedgerEntryType } from "@ledger-book/contracts";
+
+import { formatCurrency } from "../lib/format";
 
 const props = defineProps<{
   entries: readonly LedgerEntry[];
   error: string | null;
+  holdings: readonly Holding[];
   loading: boolean;
+  selectedSecurityId: string;
 }>();
 
 const emit = defineEmits<{
   retry: [];
+  selectHolding: [securityId: string];
 }>();
 
 const entryLabels: Record<LedgerEntryType, string> = {
@@ -23,12 +28,29 @@ const entryLabels: Record<LedgerEntryType, string> = {
   reversal: "沖回",
 };
 
+const securityLabels = computed(
+  () =>
+    new Map(
+      props.holdings.map((holding) => [holding.securityId, `${holding.symbol} ${holding.name}`]),
+    ),
+);
+
 function cashEffect(entry: LedgerEntry): number {
   return entry.grossCashAmount - entry.feeAmount;
 }
 
 function cashEffectClass(entry: LedgerEntry): string {
   return cashEffect(entry) >= 0 ? "cash-effect--positive" : "cash-effect--negative";
+}
+
+function securityLabel(securityId: string | undefined): string {
+  return securityId ? (securityLabels.value.get(securityId) ?? securityId) : "—";
+}
+
+function selectEntry(entry: LedgerEntry): void {
+  if (entry.securityId) {
+    emit("selectHolding", entry.securityId);
+  }
 }
 </script>
 
@@ -61,10 +83,29 @@ function cashEffectClass(entry: LedgerEntry): string {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="entry in entries" :key="entry.id">
-            <td>{{ formatDate(entry.occurredOn) }}</td>
+          <tr
+            v-for="entry in entries"
+            :key="entry.id"
+            :class="{
+              'ledger-row--selectable': entry.securityId,
+              'ledger-row--selected': entry.securityId === selectedSecurityId,
+            }"
+            @click="selectEntry(entry)"
+          >
+            <td>{{ entry.occurredOn }}</td>
             <td>{{ entryLabels[entry.entryType] }}</td>
-            <td>{{ entry.securityId ?? "—" }}</td>
+            <td>
+              <button
+                v-if="entry.securityId"
+                class="ledger-security"
+                type="button"
+                :aria-pressed="entry.securityId === selectedSecurityId"
+                @click.stop="selectEntry(entry)"
+              >
+                {{ securityLabel(entry.securityId) }}
+              </button>
+              <template v-else>—</template>
+            </td>
             <td>{{ entry.quantity?.toLocaleString("zh-TW") ?? "—" }}</td>
             <td :class="cashEffectClass(entry)">{{ formatCurrency(cashEffect(entry)) }}</td>
             <td>{{ formatCurrency(entry.feeAmount) }}</td>
@@ -144,6 +185,40 @@ th {
 th:nth-last-child(-n + 3),
 td:nth-last-child(-n + 3) {
   text-align: right;
+}
+
+.ledger-row--selectable {
+  cursor: pointer;
+}
+
+.ledger-row--selected {
+  background: var(--primary-subtle);
+  box-shadow: inset 0.1875rem 0 var(--accent);
+}
+
+.ledger-row--selectable:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .ledger-row--selectable:hover {
+    background: var(--primary-subtle);
+  }
+}
+
+.ledger-security {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.ledger-security:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0.1875rem;
 }
 
 .cash-effect--positive {

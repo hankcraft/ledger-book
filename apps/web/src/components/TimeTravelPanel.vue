@@ -42,7 +42,7 @@ const sentiment = computed(() => {
       <p v-if="asOfDate" class="as-of">{{ formatDate(asOfDate) }}</p>
     </div>
 
-    <p v-if="!holding" class="placeholder">從持倉列表選擇標的，系統會整理該日期以前的資料。</p>
+    <p v-if="!holding" class="placeholder">從交易帳本選擇標的，系統會整理該日期以前的資料。</p>
     <div v-else-if="phase === 'error'" class="report-error" role="alert">
       <p>{{ error }}</p>
       <button class="report-button" type="button" @click="emit('retry')">重試整理</button>

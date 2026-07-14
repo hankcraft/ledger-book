@@ -52,12 +52,6 @@ function selectDate(event: Event): void {
   }
 }
 
-function selectHolding(event: Event): void {
-  if (event.target instanceof HTMLSelectElement) {
-    emit("selectHolding", event.target.value);
-  }
-}
-
 function focusHeading(): void {
   heading.value?.focus();
 }
@@ -108,8 +102,11 @@ defineExpose({ focusHeading });
         class="workbench-panel workbench-panel--ledger"
         :entries="ledgerEntries"
         :error="ledgerError"
+        :holdings="dashboard.holdings"
         :loading="ledgerLoading"
+        :selected-security-id="selectedSecurityId"
         @retry="emit('retryLedger')"
+        @select-holding="emit('selectHolding', $event)"
       />
       <aside class="performance-pane workbench-panel workbench-panel--performance">
         <section class="valuation-controls" aria-labelledby="valuation-heading">
@@ -117,28 +114,14 @@ defineExpose({ focusHeading });
             <p class="eyebrow">計算範圍</p>
             <h2 id="valuation-heading">估值日</h2>
           </div>
-          <div class="valuation-selects">
-            <label class="valuation-select">
-              <span>從已載入的估值日選擇</span>
-              <select :value="selectedDate" @change="selectDate">
-                <option v-for="date in availableDates" :key="date" :value="date">
-                  {{ formatDate(date) }}
-                </option>
-              </select>
-            </label>
-            <label class="valuation-select">
-              <span>回溯標的</span>
-              <select :value="selectedSecurityId" @change="selectHolding">
-                <option
-                  v-for="holding in dashboard.holdings"
-                  :key="holding.securityId"
-                  :value="holding.securityId"
-                >
-                  {{ holding.symbol }} {{ holding.name }}
-                </option>
-              </select>
-            </label>
-          </div>
+          <label class="valuation-select">
+            <span>從已載入的估值日選擇</span>
+            <select :value="selectedDate" @change="selectDate">
+              <option v-for="date in availableDates" :key="date" :value="date">
+                {{ formatDate(date) }}
+              </option>
+            </select>
+          </label>
           <p class="valuation-helper">績效與回溯資料會同步更新至此日期；帳本保留完整交易歷史。</p>
         </section>
 
@@ -268,8 +251,7 @@ defineExpose({ focusHeading });
   background: var(--surface);
 }
 
-.performance-pane,
-.valuation-selects {
+.performance-pane {
   display: grid;
   gap: var(--space-3);
 }
