@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ledger-book/contracts": "workspace:*",
+    "echarts": "6.1.0",
     "vue": "3.5.39"
   },
   "devDependencies": {

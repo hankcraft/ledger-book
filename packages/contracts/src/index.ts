@@ -20,15 +20,31 @@ export interface PortfolioSummary {
   benchmarkSymbol: "0050";
 }
 
+export type LedgerEntryType =
+  | "buy"
+  | "sell"
+  | "cash_deposit"
+  | "cash_withdrawal"
+  | "dividend"
+  | "fee"
+  | "reversal";
+
+export interface LedgerEntry {
+  id: string;
+  portfolioId: typeof DEMO_PORTFOLIO_ID;
+  sequence: number;
+  occurredOn: string;
+  entryType: LedgerEntryType;
+  securityId?: string;
+  quantity?: number;
+  unitPrice?: number;
+  grossCashAmount: number;
+  feeAmount: number;
+}
+
 export interface EmptyDashboard {
   state: "empty";
   portfolio: PortfolioSummary;
-}
-
-export interface TimelinePoint {
-  date: string;
-  marketValue: number;
-  benchmarkValue: number;
 }
 
 export interface Holding {
@@ -41,19 +57,38 @@ export interface Holding {
   changePercent: number;
 }
 
+export interface PortfolioSnapshot {
+  asOfDate: string;
+  marketValue: number;
+  cashValue: number;
+  holdings: Holding[];
+}
+
+export interface TimelinePoint {
+  date: string;
+  marketValue: number;
+  benchmarkValue: number;
+}
+
 export interface PerformanceMetrics {
-  xirr: number;
-  twr: number;
-  benchmarkReturn: number;
+  xirr: number | null;
+  twr: number | null;
+  benchmarkReturn: number | null;
+}
+
+export interface Benchmark {
+  symbol: string;
+  return: number | null;
 }
 
 export interface ReadyDashboard {
   state: "ready";
   portfolio: PortfolioSummary;
-  asOfDate: string;
-  timeline: TimelinePoint[];
+  latestSnapshot: PortfolioSnapshot;
+  timelinePoints: TimelinePoint[];
   holdings: Holding[];
   metrics: PerformanceMetrics;
+  benchmark: Benchmark;
   warnings: string[];
 }
 
@@ -65,6 +100,7 @@ export interface TimeTravelReportRequest {
 }
 
 export type Sentiment = "bullish" | "bearish" | "neutral";
+export type SentimentColor = "red" | "green" | "gray";
 
 export interface EvidenceCitation {
   id: string;
@@ -80,6 +116,7 @@ export interface TimeTravelReport {
   symbol: string;
   asOfDate: string;
   sentiment: Sentiment;
+  uiColor: SentimentColor;
   summary: string;
   citations: EvidenceCitation[];
   complianceStatus: "passed" | "rejected";

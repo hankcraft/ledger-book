@@ -6,12 +6,17 @@ import {
   type DemoImportResult,
   type EvidenceCitation,
   type Holding,
+  type LedgerEntry,
+  type LedgerEntryType,
   type PerformanceMetrics,
+  type PortfolioSnapshot,
   type PortfolioSummary,
   type TimeTravelReport,
 } from "@ledger-book/contracts";
 import { Elysia, t } from "elysia";
 import { convertRate, xirr } from "node-irr";
+
+import demoLedgerCsv from "./data/demo-ledger.csv" with { type: "text" };
 
 const portfolio: PortfolioSummary = {
   id: DEMO_PORTFOLIO_ID,
@@ -21,62 +26,62 @@ const portfolio: PortfolioSummary = {
 };
 
 const securities = [
-  { id: "2330", symbol: "2330", name: "台積電" },
+  { id: "0050", symbol: "0050", name: "元大台灣50" },
   { id: "00878", symbol: "00878", name: "國泰永續高股息" },
+  { id: "2330", symbol: "2330", name: "台積電" },
+  { id: "2317", symbol: "2317", name: "鴻海" },
+  { id: "2454", symbol: "2454", name: "聯發科" },
 ] as const;
 
 type SecurityId = (typeof securities)[number]["id"];
 
 interface Price {
-  symbol: SecurityId | "0050";
+  symbol: SecurityId;
   date: string;
   close: number;
 }
 
 const prices: readonly Price[] = [
-  { symbol: "2330", date: "2024-01-02", close: 600 },
-  { symbol: "00878", date: "2024-01-02", close: 20 },
   { symbol: "0050", date: "2024-01-02", close: 145 },
-  { symbol: "2330", date: "2024-06-28", close: 950 },
-  { symbol: "00878", date: "2024-06-28", close: 22.5 },
-  { symbol: "0050", date: "2024-06-28", close: 180 },
-  { symbol: "2330", date: "2024-12-31", close: 1075 },
-  { symbol: "00878", date: "2024-12-31", close: 21.8 },
-  { symbol: "0050", date: "2024-12-31", close: 190 },
-];
-
-interface LedgerEntry {
-  id: string;
-  occurredOn: string;
-  kind: "cash_deposit" | "buy";
-  amount: number;
-  securityId?: SecurityId;
-  quantity?: number;
-}
-
-const demoLedger: readonly LedgerEntry[] = [
-  {
-    id: "entry-1",
-    occurredOn: "2024-01-02",
-    kind: "cash_deposit",
-    amount: 100_000,
-  },
-  {
-    id: "entry-2",
-    occurredOn: "2024-01-02",
-    kind: "buy",
-    amount: -30_000,
-    securityId: "2330",
-    quantity: 50,
-  },
-  {
-    id: "entry-3",
-    occurredOn: "2024-01-02",
-    kind: "buy",
-    amount: -20_000,
-    securityId: "00878",
-    quantity: 1_000,
-  },
+  { symbol: "00878", date: "2024-01-02", close: 20.5 },
+  { symbol: "2330", date: "2024-01-02", close: 590 },
+  { symbol: "2317", date: "2024-01-02", close: 102 },
+  { symbol: "2454", date: "2024-01-02", close: 900 },
+  { symbol: "0050", date: "2024-04-30", close: 166 },
+  { symbol: "00878", date: "2024-04-30", close: 21.8 },
+  { symbol: "2330", date: "2024-04-30", close: 780 },
+  { symbol: "2317", date: "2024-04-30", close: 164 },
+  { symbol: "2454", date: "2024-04-30", close: 1_000 },
+  { symbol: "0050", date: "2024-08-30", close: 185 },
+  { symbol: "00878", date: "2024-08-30", close: 22.1 },
+  { symbol: "2330", date: "2024-08-30", close: 970 },
+  { symbol: "2317", date: "2024-08-30", close: 185 },
+  { symbol: "2454", date: "2024-08-30", close: 1_200 },
+  { symbol: "0050", date: "2024-12-31", close: 192 },
+  { symbol: "00878", date: "2024-12-31", close: 21.7 },
+  { symbol: "2330", date: "2024-12-31", close: 1_060 },
+  { symbol: "2317", date: "2024-12-31", close: 180 },
+  { symbol: "2454", date: "2024-12-31", close: 1_350 },
+  { symbol: "0050", date: "2025-03-31", close: 178 },
+  { symbol: "00878", date: "2025-03-31", close: 20.7 },
+  { symbol: "2330", date: "2025-03-31", close: 960 },
+  { symbol: "2317", date: "2025-03-31", close: 150 },
+  { symbol: "2454", date: "2025-03-31", close: 1_250 },
+  { symbol: "0050", date: "2025-06-30", close: 194 },
+  { symbol: "00878", date: "2025-06-30", close: 21.3 },
+  { symbol: "2330", date: "2025-06-30", close: 1_080 },
+  { symbol: "2317", date: "2025-06-30", close: 165 },
+  { symbol: "2454", date: "2025-06-30", close: 1_450 },
+  { symbol: "0050", date: "2025-09-30", close: 202 },
+  { symbol: "00878", date: "2025-09-30", close: 21.8 },
+  { symbol: "2330", date: "2025-09-30", close: 1_200 },
+  { symbol: "2317", date: "2025-09-30", close: 185 },
+  { symbol: "2454", date: "2025-09-30", close: 1_600 },
+  { symbol: "0050", date: "2025-12-31", close: 210 },
+  { symbol: "00878", date: "2025-12-31", close: 22.5 },
+  { symbol: "2330", date: "2025-12-31", close: 1_350 },
+  { symbol: "2317", date: "2025-12-31", close: 200 },
+  { symbol: "2454", date: "2025-12-31", close: 1_800 },
 ];
 
 interface Evidence extends EvidenceCitation {
@@ -147,6 +152,76 @@ function isSecurityId(value: string): value is SecurityId {
   return securities.some((security) => security.id === value);
 }
 
+function isLedgerEntryType(value: string): value is LedgerEntryType {
+  return ["buy", "sell", "cash_deposit", "cash_withdrawal", "dividend", "fee", "reversal"].includes(
+    value as LedgerEntryType,
+  );
+}
+
+function parseDemoLedger(csv: string): readonly LedgerEntry[] {
+  const [header, ...rows] = csv.trim().split(/\r?\n/);
+  if (header !== "id,occurred_on,entry_type,gross_cash_amount,fee_amount,security_id,quantity") {
+    throw new Error("Demo ledger CSV header is invalid.");
+  }
+
+  return rows.map((row, index) => {
+    const [
+      id = "",
+      occurredOn = "",
+      entryType = "",
+      grossCashAmount = "",
+      feeAmount = "",
+      securityId = "",
+      quantity = "",
+    ] = row.split(",");
+    const parsedGrossCashAmount = Number(grossCashAmount);
+    const parsedFeeAmount = Number(feeAmount);
+    const parsedSecurityId =
+      securityId === "" ? undefined : isSecurityId(securityId) ? securityId : undefined;
+    const parsedQuantity = quantity === "" ? undefined : Number(quantity);
+
+    if (
+      !id ||
+      !occurredOn ||
+      !entryType ||
+      !isIsoDate(occurredOn) ||
+      !isLedgerEntryType(entryType) ||
+      !Number.isFinite(parsedGrossCashAmount) ||
+      !Number.isFinite(parsedFeeAmount) ||
+      parsedFeeAmount < 0 ||
+      (securityId !== "" && parsedSecurityId === undefined) ||
+      (parsedQuantity !== undefined &&
+        (!Number.isInteger(parsedQuantity) || parsedQuantity <= 0)) ||
+      ((entryType === "buy" || entryType === "sell") &&
+        (parsedSecurityId === undefined || parsedQuantity === undefined)) ||
+      ((entryType === "cash_deposit" || entryType === "cash_withdrawal") &&
+        parsedSecurityId !== undefined) ||
+      (entryType === "dividend" && parsedSecurityId === undefined)
+    ) {
+      throw new Error(`Demo ledger CSV row is invalid: ${row}`);
+    }
+
+    const entry: LedgerEntry = {
+      id,
+      portfolioId: DEMO_PORTFOLIO_ID,
+      sequence: index + 1,
+      occurredOn,
+      entryType,
+      grossCashAmount: parsedGrossCashAmount,
+      feeAmount: parsedFeeAmount,
+    };
+    if (parsedSecurityId !== undefined) entry.securityId = parsedSecurityId;
+    if (parsedQuantity !== undefined) entry.quantity = parsedQuantity;
+    return entry;
+  });
+}
+
+const demoLedger = parseDemoLedger(demoLedgerCsv);
+
+function cashEffect(entry: LedgerEntry): number {
+  return entry.grossCashAmount - entry.feeAmount;
+}
+
 export interface DemoStore {
   importDemo(): DemoImportResult | undefined;
   getImport(importId: string): DemoImportResult | undefined;
@@ -165,21 +240,30 @@ export function createDemoStore(): DemoStore {
 
   function getHoldings(asOfDate: string): Holding[] | undefined {
     const holdings: Array<Holding | undefined> = securities.map((security) => {
-      const entry = entries.find(
-        (candidate) => candidate.kind === "buy" && candidate.securityId === security.id,
-      );
+      const quantity = entries
+        .filter(
+          (entry) =>
+            entry.occurredOn <= asOfDate &&
+            entry.securityId === security.id &&
+            (entry.entryType === "buy" || entry.entryType === "sell"),
+        )
+        .reduce(
+          (total, entry) =>
+            total + (entry.entryType === "buy" ? entry.quantity! : -entry.quantity!),
+          0,
+        );
       const current = priceOnOrBefore(security.id, asOfDate);
       const initial = priceOnOrBefore(security.id, "2024-01-02");
 
-      if (!entry?.quantity || !current || !initial) return undefined;
+      if (quantity <= 0 || !current || !initial) return undefined;
 
       return {
         securityId: security.id,
         symbol: security.symbol,
         name: security.name,
-        quantity: entry.quantity,
+        quantity,
         unitPrice: current.close,
-        marketValue: entry.quantity * current.close,
+        marketValue: quantity * current.close,
         changePercent: current.close / initial.close - 1,
       };
     });
@@ -188,27 +272,34 @@ export function createDemoStore(): DemoStore {
     return readyHoldings.length === securities.length ? readyHoldings : undefined;
   }
 
-  function getDashboard(asOfDate: string): Dashboard | undefined {
+  function getDashboard(requestedDate: string): Dashboard | undefined {
     if (!imported) return { state: "empty", portfolio };
 
-    const dates = knownPriceDates(asOfDate);
+    const dates = knownPriceDates(requestedDate);
     const initialBenchmark = priceOnOrBefore("0050", "2024-01-02");
     if (dates.length === 0 || !initialBenchmark) return undefined;
 
-    const holdings = getHoldings(asOfDate);
+    const snapshotDate = dates.at(-1);
+    if (!snapshotDate) return undefined;
+    const holdings = getHoldings(snapshotDate);
     if (!holdings) return undefined;
 
-    const cash = entries.reduce((total, entry) => total + entry.amount, 0);
+    const initialInvestment = entries
+      .filter((entry) => entry.entryType === "cash_deposit" && entry.occurredOn <= snapshotDate)
+      .reduce((total, entry) => total + cashEffect(entry), 0);
     const timeline = dates.map((date) => {
       const pointHoldings = getHoldings(date);
       const benchmark = priceOnOrBefore("0050", date);
+      const cash = entries
+        .filter((entry) => entry.occurredOn <= date)
+        .reduce((total, entry) => total + cashEffect(entry), 0);
       if (!pointHoldings || !benchmark) return undefined;
 
       return {
         date,
         marketValue:
           cash + pointHoldings.reduce((total, holding) => total + holding.marketValue, 0),
-        benchmarkValue: 100_000 * (benchmark.close / initialBenchmark.close),
+        benchmarkValue: initialInvestment * (benchmark.close / initialBenchmark.close),
       };
     });
 
@@ -220,25 +311,43 @@ export function createDemoStore(): DemoStore {
     const firstPoint = readyTimeline[0];
     if (!firstPoint || !finalPoint) return undefined;
 
+    const xirrCashFlows = entries
+      .filter((entry) => entry.entryType === "cash_deposit" && entry.occurredOn <= snapshotDate)
+      .map((entry) => ({ amount: -cashEffect(entry), date: entry.occurredOn }));
     const metrics: PerformanceMetrics = {
-      xirr: calculateAnnualXirr([
-        { amount: -100_000, date: "2024-01-02" },
-        { amount: finalPoint.marketValue, date: finalPoint.date },
-      ]),
-      twr: calculateTwr(
-        readyTimeline.map((point) => point.marketValue),
-        readyTimeline.map(() => 0),
-      ),
+      xirr: xirrCashFlows.some((cashFlow) => cashFlow.date < finalPoint.date)
+        ? calculateAnnualXirr([
+            ...xirrCashFlows,
+            { amount: finalPoint.marketValue, date: finalPoint.date },
+          ])
+        : 0,
+      twr:
+        readyTimeline.length > 1
+          ? calculateTwr(
+              readyTimeline.map((point) => point.marketValue),
+              readyTimeline.map(() => 0),
+            )
+          : 0,
       benchmarkReturn: finalPoint.benchmarkValue / firstPoint.benchmarkValue - 1,
+    };
+    const cashValue = entries
+      .filter((entry) => entry.occurredOn <= snapshotDate)
+      .reduce((total, entry) => total + cashEffect(entry), 0);
+    const latestSnapshot: PortfolioSnapshot = {
+      asOfDate: finalPoint.date,
+      marketValue: finalPoint.marketValue,
+      cashValue,
+      holdings,
     };
 
     return {
       state: "ready",
       portfolio,
-      asOfDate: finalPoint.date,
-      timeline: readyTimeline,
+      latestSnapshot,
+      timelinePoints: readyTimeline,
       holdings,
       metrics,
+      benchmark: { symbol: portfolio.benchmarkSymbol, return: metrics.benchmarkReturn },
       warnings: [],
     };
   }
@@ -253,7 +362,7 @@ export function createDemoStore(): DemoStore {
         importId: "demo-import-1",
         portfolioId: DEMO_PORTFOLIO_ID,
         status: "completed",
-        completedAt: "2024-12-31T08:00:00.000Z",
+        completedAt: "2025-12-31T08:00:00.000Z",
       };
       return importResult;
     },
@@ -283,6 +392,7 @@ export function createDemoStore(): DemoStore {
         symbol: security.symbol,
         asOfDate,
         sentiment: securityId === "2330" ? "bullish" : "neutral",
+        uiColor: securityId === "2330" ? "red" : "gray",
         summary,
         citations,
         complianceStatus: "passed",
@@ -336,7 +446,7 @@ export function createApp(store = createDemoStore()) {
           return error("portfolio_not_found", "找不到投資組合。");
         }
 
-        const asOfDate = query.asOfDate ?? "2024-12-31";
+        const asOfDate = query.asOfDate ?? "2025-12-31";
         if (!isIsoDate(asOfDate)) {
           set.status = 400;
           return error("invalid_as_of_date", "asOfDate 必須是 YYYY-MM-DD。");
@@ -351,6 +461,17 @@ export function createApp(store = createDemoStore()) {
       },
       { query: t.Object({ asOfDate: t.Optional(t.String()) }) },
     )
+    .get("/api/portfolios/:portfolioId/ledger", ({ params, set }) => {
+      if (params.portfolioId !== DEMO_PORTFOLIO_ID) {
+        set.status = 404;
+        return error("portfolio_not_found", "找不到投資組合。");
+      }
+      if (!store.hasImported()) {
+        set.status = 409;
+        return error("demo_import_required", "請先匯入 Fake Demo。");
+      }
+      return store.getLedgerEntries();
+    })
     .post(
       "/api/portfolios/:portfolioId/time-travel-reports",
       ({ params, body, set }) => {
