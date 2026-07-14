@@ -138,6 +138,7 @@ defineExpose({ focusHeading });
           :loading="dashboardBusy"
           :selected-date="selectedDate"
           :timeline-points="dashboard.timelinePoints"
+          @select-date="emit('selectDate', $event)"
         />
       </aside>
     </section>
