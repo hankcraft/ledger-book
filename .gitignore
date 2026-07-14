@@ -3,4 +3,9 @@ dist/
 coverage/
 .env
 .env.*
+!.env.example
 *.log
+
+# Agent build artifacts
+apps/agent/deployment_package.zip
+tmp_agentcore/

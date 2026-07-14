@@ -7,13 +7,16 @@
   ],
   "scripts": {
     "dev": "bun --filter '@ledger-book/api' --filter '@ledger-book/web' --parallel dev",
-    "build": "bun --filter '@ledger-book/contracts' typecheck && bun --filter '@ledger-book/api' build && bun --filter '@ledger-book/web' build",
+    "build": "bun --filter '@ledger-book/contracts' typecheck && bun --filter '@ledger-book/api' build && bun --filter '@ledger-book/web' build && bun --filter '@ledger-book/agent' build",
     "test": "bun --filter '@ledger-book/api' test",
-    "typecheck": "bun --filter '@ledger-book/contracts' typecheck && bun --filter '@ledger-book/api' typecheck && bun --filter '@ledger-book/web' typecheck",
+    "typecheck": "bun --filter '@ledger-book/contracts' typecheck && bun --filter '@ledger-book/api' typecheck && bun --filter '@ledger-book/web' typecheck && bun --filter '@ledger-book/agent' typecheck",
     "lint": "oxlint apps packages",
     "lint:fix": "oxlint --fix apps packages",
     "format": "oxfmt apps packages",
     "format:check": "oxfmt --check apps packages",
+    "agent:dev": "bun --filter '@ledger-book/agent' dev",
+    "agent:build": "bun --filter '@ledger-book/agent' build",
+    "agent:deploy": "bun --filter '@ledger-book/agent' deploy",
     "c4:view": "bunx likec4@1.53.0 serve docs/architecture",
     "c4:validate": "bunx likec4@1.53.0 validate --json --no-layout --file docs/architecture/ledger-book.c4 docs/architecture",
     "prepare": "lefthook install"
