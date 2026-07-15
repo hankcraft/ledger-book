@@ -9,6 +9,7 @@ import StepQuestion from "../components/StepQuestion.vue";
 import StockInput from "../components/StockInput.vue";
 import { useAppStore } from "../composables/useAppStore";
 import { useOnboardFlow } from "../composables/useOnboardFlow";
+import { BRAND } from "../constants/brand";
 
 const router = useRouter();
 const { state, completeOnboarding, skipOnboarding, showToast } = useAppStore();
@@ -19,12 +20,15 @@ const {
   stockName,
   holdingStatus,
   pnlStatus,
+  purchaseTimeEstimate,
   midInsight,
   finalInsight,
   isGeneratingInsight,
+  startOnboarding,
   submitStock,
   submitChoice,
   acknowledgeInsight,
+  submitTimeEstimate,
   submitCostAndWeight,
 } = useOnboardFlow();
 
@@ -36,6 +40,17 @@ const isSubmittingStep = ref(false);
 const hasCost = computed(
   () => String(costInput.value).trim().length > 0 && Number(costInput.value) > 0,
 );
+
+const introBullets = [
+  "了解你的真實報酬率，不只看帳面數字",
+  "釐清焦慮是來自價格，還是配置",
+  "逐步建立屬於你的投資原則",
+];
+
+function handleStart(): void {
+  transitionKey.value++;
+  startOnboarding();
+}
 
 function handleStockSubmit(name: string): void {
   transitionKey.value++;
@@ -50,7 +65,7 @@ async function handleChoiceSelect(choice: string): Promise<void> {
     await submitChoice(choice);
     transitionKey.value++;
   } catch {
-    showToast("暫時無法產生洞察，請稍後再試。");
+    showToast("暫時沒辦法繼續，請稍後再試。");
   } finally {
     isSubmittingStep.value = false;
   }
@@ -61,6 +76,11 @@ function handleInsightContinue(): void {
   acknowledgeInsight();
 }
 
+function handleTimeEstimate(estimate: string): void {
+  transitionKey.value++;
+  submitTimeEstimate(estimate);
+}
+
 async function handleCostSubmit(): Promise<void> {
   if (!hasCost.value || isSubmittingStep.value) return;
   isSubmittingStep.value = true;
@@ -69,7 +89,7 @@ async function handleCostSubmit(): Promise<void> {
     await submitCostAndWeight(String(costInput.value), weightInput.value);
     transitionKey.value++;
   } catch {
-    showToast("暫時無法完成分析，請稍後再試。");
+    showToast("暫時沒辦法完成分析，請稍後再試。");
   } finally {
     isSubmittingStep.value = false;
   }
@@ -85,6 +105,7 @@ async function handleComplete(): Promise<void> {
       pnlStatus: pnlStatus.value,
       cost: Number(costInput.value) || 500,
       weightPercent: Number(weightInput.value),
+      purchaseTimeEstimate: purchaseTimeEstimate.value,
     });
     await router.push("/");
   } catch {
@@ -97,7 +118,7 @@ async function handleSkip(): Promise<void> {
     await skipOnboarding();
     await router.push("/");
   } catch {
-    showToast("暫時無法進入範例模式，請稍後再試。");
+    showToast("暫時無法進入，請稍後再試。");
   }
 }
 </script>
@@ -108,13 +129,29 @@ async function handleSkip(): Promise<void> {
 
     <Transition name="step" mode="out-in">
       <div :key="transitionKey" class="step-content">
-        <template v-if="currentStep.type === 'stock-input'">
+        <!-- Intro step -->
+        <template v-if="currentStep.type === 'intro'">
+          <div class="intro-card">
+            <h1 class="intro-title">{{ BRAND.appName }}</h1>
+            <p class="intro-tagline">{{ BRAND.tagline }}</p>
+            <ul class="intro-bullets">
+              <li v-for="bullet in introBullets" :key="bullet">{{ bullet }}</li>
+            </ul>
+            <button class="primary-btn" @click="handleStart">開始設定</button>
+          </div>
+        </template>
+
+        <!-- Stock input -->
+        <template v-else-if="currentStep.type === 'stock-input'">
           <StepQuestion :question="currentStep.question" />
+          <p v-if="currentStep.benefit" class="benefit-text">{{ currentStep.benefit }}</p>
           <StockInput @submit="handleStockSubmit" />
         </template>
 
+        <!-- Choice -->
         <template v-else-if="currentStep.type === 'choice'">
           <StepQuestion :question="currentStep.question" />
+          <p v-if="currentStep.benefit" class="benefit-text">{{ currentStep.benefit }}</p>
           <ChoiceSelector
             :choices="currentStep.choices!"
             :disabled="isSubmittingStep"
@@ -122,6 +159,7 @@ async function handleSkip(): Promise<void> {
           />
         </template>
 
+        <!-- Insight -->
         <template v-else-if="currentStep.type === 'insight'">
           <InsightFeedback
             :text="midInsight"
@@ -130,8 +168,21 @@ async function handleSkip(): Promise<void> {
           />
         </template>
 
+        <!-- Time estimate -->
+        <template v-else-if="currentStep.type === 'time-estimate'">
+          <StepQuestion :question="currentStep.question" />
+          <p v-if="currentStep.benefit" class="benefit-text">{{ currentStep.benefit }}</p>
+          <ChoiceSelector
+            :choices="currentStep.choices!"
+            :disabled="isSubmittingStep"
+            @select="handleTimeEstimate"
+          />
+        </template>
+
+        <!-- Cost input -->
         <template v-else-if="currentStep.type === 'cost-input'">
           <StepQuestion :question="currentStep.question" />
+          <p v-if="currentStep.benefit" class="benefit-text">{{ currentStep.benefit }}</p>
           <div class="cost-form">
             <div class="form-group">
               <label for="cost">大約成本（元）</label>
@@ -166,15 +217,16 @@ async function handleSkip(): Promise<void> {
               :disabled="!hasCost || isSubmittingStep"
               @click="handleCostSubmit"
             >
-              {{ isGeneratingInsight ? "分析中…" : "分析看看" }}
+              {{ isGeneratingInsight ? "整理中…" : "看看分析" }}
             </button>
           </div>
         </template>
 
+        <!-- Final insight -->
         <template v-else-if="currentStep.type === 'final-insight'">
           <InsightFeedback :text="finalInsight" />
           <button class="primary-btn" :disabled="state.loading" @click="handleComplete">
-            {{ state.loading ? "建立中…" : "開始使用持倉鏡" }}
+            {{ state.loading ? "建立中…" : "開始使用" }}
           </button>
         </template>
       </div>
@@ -221,6 +273,63 @@ async function handleSkip(): Promise<void> {
   transform: translateY(-8px);
 }
 
+/* Intro */
+.intro-card {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.intro-title {
+  font-size: var(--text-heading);
+  font-weight: 700;
+  margin: 0;
+}
+
+.intro-tagline {
+  color: var(--muted);
+  margin: 0;
+  font-size: var(--text-body);
+}
+
+.intro-bullets {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  text-align: left;
+  width: 100%;
+}
+
+.intro-bullets li {
+  padding-left: var(--space-6);
+  position: relative;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.intro-bullets li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--positive);
+  font-weight: 700;
+}
+
+/* Benefit text */
+.benefit-text {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: var(--text-small);
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Cost form */
 .cost-form {
   width: 100%;
   display: flex;

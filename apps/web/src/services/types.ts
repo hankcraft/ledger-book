@@ -24,6 +24,7 @@ export interface OnboardingInput {
   pnlStatus: "賺錢" | "接近成本" | "虧損";
   cost?: number;
   weightPercent?: number;
+  purchaseTimeEstimate?: "一週內" | "一個月內" | "三個月內" | "半年前" | "一年以上";
 }
 
 export interface OnboardingInsight {
@@ -73,7 +74,15 @@ export interface IContextService {
 
 // ─── Home (Scenarios) ─────────────────────────────────────────
 
+export interface DailyPerformance {
+  portfolioReturn: number;
+  benchmarkReturn: number;
+  asOf: string;
+}
+
 export interface IHomeService {
+  /** Get today's portfolio vs benchmark performance */
+  getDailyPerformance(): Promise<DailyPerformance>;
   /** Get the current contextual scenario for this user */
   getCurrentScenario(): Promise<Scenario>;
   /** User selected a home action; the agent service owns conversation creation. */
@@ -105,6 +114,38 @@ export interface IAgentService {
   selectOption(conversationId: string, option: string): Promise<void>;
 }
 
+// ─── Performance ──────────────────────────────────────────────
+
+export interface PerformanceTimelinePoint {
+  date: string;
+  portfolioReturn: number;
+  benchmarkReturn: number;
+}
+
+export interface PerformanceMetricsSummary {
+  xirr: number;
+  twr: number;
+  benchmarkReturn: number;
+}
+
+export interface PerformanceTimeline {
+  points: PerformanceTimelinePoint[];
+  metrics: PerformanceMetricsSummary;
+}
+
+export interface TimePointEvent {
+  date: string;
+  type: "buy" | "sell" | "dividend" | "market";
+  summary: string;
+}
+
+export interface IPerformanceService {
+  /** Get the full performance timeline with metrics */
+  getPerformanceTimeline(): Promise<PerformanceTimeline>;
+  /** Get event details for a specific date */
+  getTimePointEvent(date: string): Promise<TimePointEvent | null>;
+}
+
 // ─── Aggregated Service ───────────────────────────────────────
 
 export interface IApiService {
@@ -112,4 +153,5 @@ export interface IApiService {
   context: IContextService;
   home: IHomeService;
   agent: IAgentService;
+  performance: IPerformanceService;
 }
