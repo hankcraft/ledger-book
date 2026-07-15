@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import type { ConversationService } from "../../services/conversation.service.ts";
 import type { ContextService } from "../../services/context.service.ts";
 import { v1Error } from "../../lib/errors.ts";
-import { streamAgentAsV1Messages, buildPortfolioContext } from "../../agent-client.ts";
+import { invokeAgent, buildPortfolioContext } from "../../agent-client.ts";
 
 export function createConversationRoutes(
   conversationService: ConversationService,
@@ -50,6 +50,9 @@ export function createConversationRoutes(
           text: body.text,
         });
 
+        const turnId = `turn-${Date.now()}`;
+        let agentText: string;
+
         // Try real Agent first
         try {
           const portfolioContext = buildPortfolioContext(
@@ -57,53 +60,47 @@ export function createConversationRoutes(
             ctx.principles,
             ctx.memories,
           );
-          const turnId = `turn-${Date.now()}`;
-          await conversationService.markResponded(params.id);
-
-          // Stream and collect response for persistence
-          const agentResponse = await streamAgentAsV1Messages(
-            { prompt: body.text, portfolioContext },
-            turnId,
-            { holdings: ctx.holdings, memories: ctx.memories },
-          );
-
-          // Persist agent messages from the stream
-          // Note: streamAgentAsV1Messages returns a Response object for SSE
-          // We need to save messages separately since we can't easily intercept the stream
-          // The agent response is already streamed to client; save a summary
-          return agentResponse;
+          agentText = await invokeAgent({ prompt: body.text, portfolioContext });
         } catch (err) {
           console.log(
-            "[v1] Agent unavailable for conversation, using fallback:",
+            "[v1] Agent unavailable, using fallback:",
             err instanceof Error ? err.message : err,
           );
+          // Fallback text
+          agentText = conv.selectedOption
+            ? `你選擇先釐清「${conv.selectedOption}」。我會把這個問題和你的持倉、過去記憶一起整理。`
+            : "我收到你的問題了。讓我根據你的持倉和過去的對話脈絡來分析。";
         }
 
-        // Fallback: simple text response
         await conversationService.markResponded(params.id);
-        const turnId = `turn-${Date.now()}`;
-        const fallbackText = conv.selectedOption
-          ? `你選擇先釐清「${conv.selectedOption}」。我會把這個問題和你的持倉、過去記憶一起整理。`
-          : "我收到你的問題了。讓我根據你的持倉和過去的對話脈絡來分析。";
 
-        // Persist agent message
+        // Persist the agent text response
         await conversationService.saveMessage(params.id, {
           role: "agent",
-          text: fallbackText,
+          text: agentText,
         });
 
-        const messages = [{ id: turnId, role: "agent" as const, text: fallbackText }];
+        // Build SSE messages to stream to client (text only, no background cards)
+        const messages: Array<{ id: string; role: "agent"; text?: string; card?: unknown }> = [
+          { id: `${turnId}-text`, role: "agent", text: agentText },
+          {
+            id: `${turnId}-question`,
+            role: "agent",
+            card: {
+              type: "confirmation-question",
+              question: "你想進一步了解哪個方向？",
+              options: ["持股集中度分析", "法人最近動態", "我的操作模式是否一致"],
+            },
+          },
+        ];
 
-        set.headers["content-type"] = "text/event-stream";
-        set.headers["cache-control"] = "no-cache";
-        set.headers["connection"] = "keep-alive";
-
+        // Stream as SSE
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
           async start(controller) {
             for (const msg of messages) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(msg)}\n\n`));
-              await new Promise((r) => setTimeout(r, 80));
+              await new Promise((r) => setTimeout(r, 50));
             }
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();

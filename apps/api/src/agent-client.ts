@@ -21,7 +21,9 @@ export interface AgentInvokeOptions {
  */
 export async function invokeAgent(options: AgentInvokeOptions): Promise<string> {
   const { prompt, portfolioContext, timeout = 30_000 } = options;
-  const fullPrompt = portfolioContext ? `${portfolioContext}\n\n---\n\n用戶提問：${prompt}` : prompt;
+  const fullPrompt = portfolioContext
+    ? `${portfolioContext}\n\n---\n\n用戶提問：${prompt}`
+    : prompt;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -86,7 +88,9 @@ export async function streamAgentAsV1Messages(
   },
 ): Promise<Response> {
   const { prompt, portfolioContext, timeout = 60_000 } = options;
-  const fullPrompt = portfolioContext ? `${portfolioContext}\n\n---\n\n用戶提問：${prompt}` : prompt;
+  const fullPrompt = portfolioContext
+    ? `${portfolioContext}\n\n---\n\n用戶提問：${prompt}`
+    : prompt;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -175,13 +179,14 @@ interface StreamMessage {
 }
 
 /**
- * Transform Agent text response into multiple structured messages with CardData.
+ * Transform Agent text response into structured messages.
+ * Only includes the agent's actual text reply and a follow-up question.
  */
 function buildStructuredMessages(
   turnId: string,
   agentText: string,
   _userPrompt: string,
-  context?: {
+  _context?: {
     holdings?: Array<{ name: string; weight: number; cost: number; plPercent: number }>;
     memories?: Array<{ quote: string; date: string; archived: boolean }>;
   },
@@ -189,70 +194,10 @@ function buildStructuredMessages(
   const messages: StreamMessage[] = [];
   const text = agentText || "無法生成回應。";
 
-  // 1. Main text response from Agent
+  // Main text response from Agent
   messages.push({ id: `${turnId}-text`, role: "agent", text });
 
-  // 2. Portfolio insight card (if we have holdings data)
-  const holdings = context?.holdings;
-  if (holdings && holdings.length > 0) {
-    const totalPl = holdings.reduce((sum, h) => sum + h.plPercent * h.weight / 100, 0);
-    const breakdown = holdings
-      .sort((a, b) => b.weight - a.weight)
-      .slice(0, 3)
-      .map((h) => ({
-        label: h.name,
-        value: `${h.plPercent >= 0 ? "+" : ""}${h.plPercent}%`,
-        note: `佔持倉 ${h.weight}%`,
-      }));
-
-    messages.push({
-      id: `${turnId}-insight`,
-      role: "agent",
-      card: {
-        type: "insight",
-        title: "你的持倉現況",
-        portfolioChange: `${totalPl >= 0 ? "+" : ""}${totalPl.toFixed(1)}%`,
-        marketChange: "+3.2%",
-        breakdown,
-      },
-    });
-  }
-
-  // 3. Evidence card showing data sources
-  messages.push({
-    id: `${turnId}-evidence`,
-    role: "agent",
-    card: {
-      type: "evidence",
-      title: "分析依據",
-      confidence: 78,
-      sources: [
-        { name: "OpenSearch 行情資料（2025 全年）", kind: "fact" },
-        { name: "法人買賣超逐日統計", kind: "fact" },
-        { name: "同學會社群情緒分析", kind: "inference" },
-        { name: "持倉成本與部位權重", kind: "fact" },
-      ],
-      summary: "以上判讀基於結構化市場數據與你的真實持倉。情緒面推論標示為「推論」供你辨別。",
-    },
-  });
-
-  // 4. Memory recall if relevant memories exist
-  const memories = context?.memories?.filter((m) => !m.archived);
-  if (memories && memories.length > 0) {
-    const recent = memories[0]!;
-    messages.push({
-      id: `${turnId}-memory`,
-      role: "agent",
-      card: {
-        type: "memory-recall",
-        date: recent.date,
-        context: "你之前提過：",
-        quote: recent.quote,
-      },
-    });
-  }
-
-  // 5. Confirmation question for next steps
+  // Follow-up question for next steps
   messages.push({
     id: `${turnId}-question`,
     role: "agent",
@@ -279,8 +224,13 @@ export function buildPortfolioContext(
   if (holdings.length > 0) {
     lines.push("## 用戶持股組合");
     const stockCodes: Record<string, string> = {
-      台積電: "2330", 聯發科: "2454", 長榮: "2603", 聯電: "2303",
-      鴻海: "2317", "元大高股息": "0056", "元大台灣50": "0050",
+      台積電: "2330",
+      聯發科: "2454",
+      長榮: "2603",
+      聯電: "2303",
+      鴻海: "2317",
+      元大高股息: "0056",
+      元大台灣50: "0050",
     };
     for (const h of holdings) {
       const code = stockCodes[h.name] ?? "";

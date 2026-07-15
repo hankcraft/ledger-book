@@ -63,8 +63,26 @@ export function createConversationService(db: PrismaClient): ConversationService
         where: { userId },
         orderBy: { createdAt: "desc" },
         take: 20,
+        include: {
+          messages: {
+            where: { role: "agent" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+            select: { text: true },
+          },
+        },
       });
-      return rows.map(toSummary);
+      return rows.map((row) => {
+        const firstAgentText = row.messages[0]?.text;
+        // Use first agent message as conclusion, truncated
+        const conclusion = firstAgentText
+          ? firstAgentText.slice(0, 80) + (firstAgentText.length > 80 ? "…" : "")
+          : "";
+        return {
+          ...toSummary(row),
+          conclusion,
+        };
+      });
     },
 
     async createConversation(userId, prompt) {
