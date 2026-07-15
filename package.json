@@ -17,6 +17,10 @@
     "agent:dev": "bun --filter '@ledger-book/agent' dev",
     "agent:build": "bun --filter '@ledger-book/agent' build",
     "agent:deploy": "bun --filter '@ledger-book/agent' deploy",
+    "db:generate": "bun --filter '@ledger-book/api' db:generate",
+    "db:migrate": "bun --filter '@ledger-book/api' db:migrate",
+    "db:push": "bun --filter '@ledger-book/api' db:push",
+    "db:studio": "bun --filter '@ledger-book/api' db:studio",
     "c4:view": "bunx likec4@1.53.0 serve docs/architecture",
     "c4:validate": "bunx likec4@1.53.0 validate --json --no-layout --file docs/architecture/ledger-book.c4 docs/architecture",
     "prepare": "lefthook install"

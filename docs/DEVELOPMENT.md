@@ -6,10 +6,13 @@ Ledger Book demonstrates a low-friction portfolio import, XIRR/TWR performance v
 
 ## Start locally
 
-Requires Bun.
+Requires Bun and Docker (for PostgreSQL).
 
 ```sh
+docker compose up -d          # Start PostgreSQL + Redis
 bun install
+cd apps/api && bun run db:push  # Apply schema to local DB
+cd ../..
 bun run dev
 ```
 
@@ -26,26 +29,82 @@ The API listens on `http://localhost:3000`. Vite proxies `/api` to that address;
 | `bun run c4:view` | View C4 diagrams with live reload. |
 | `bun run c4:validate` | Validate the LikeC4 model. |
 
-## Current POC
+### Database commands (from `apps/api/`)
 
-The runnable application is intentionally deterministic and in memory.
+| Command | Purpose |
+| --- | --- |
+| `bun run db:push` | Apply Prisma schema to the DB (dev). |
+| `bun run db:migrate` | Create and apply a migration. |
+| `bun run db:generate` | Regenerate Prisma client. |
+| `bun run db:studio` | Open Prisma Studio GUI. |
 
-- `apps/web`: Vue 3 + Vite UI.
-- `apps/api`: Bun + Elysia API, fixed prices/evidence, demo ledger store.
-- `packages/contracts`: shared request and response types.
-- Restarting the API resets the import and generated reports.
-- PostgreSQL, Redis, CMoney ingestion, and Bedrock are not integrated yet.
+## Architecture
 
-Use the demo API with camel-case JSON fields:
+The API uses a layered architecture backed by PostgreSQL (Prisma ORM):
 
-```text
-POST /api/demo-imports                         { "portfolioId": "demo-portfolio" }
-GET  /api/portfolios/demo-portfolio/dashboard?asOfDate=YYYY-MM-DD
-POST /api/portfolios/demo-portfolio/time-travel-reports
-GET  /api/time-travel-reports/:reportId
+```
+src/
+├── index.ts          # Entry: PrismaClient → createApp → listen
+├── app.ts            # Elysia composition (route plugins + CORS)
+├── db.ts             # PrismaClient singleton
+├── agent-client.ts   # Agent endpoint communication
+├── lib/              # Shared: errors.ts, validation.ts
+├── services/         # Business logic (DI via PrismaClient)
+│   ├── ledger.service.ts
+│   ├── portfolio.service.ts
+│   ├── import.service.ts
+│   ├── time-travel.service.ts
+│   ├── context.service.ts
+│   └── conversation.service.ts
+└── routes/           # Thin Elysia handlers
+    ├── health.ts, demo-imports.ts, portfolios.ts, ...
+    └── v1/ (onboarding, context, home, performance, conversations)
 ```
 
-The report request body is `{ "securityId": "2330", "asOfDate": "YYYY-MM-DD" }`.
+- `apps/web`: Vue 3 + Vite UI.
+- `apps/api`: Bun + Elysia API with PostgreSQL persistence.
+- `packages/contracts`: shared request and response types.
+- Data persists across API restarts (stored in PostgreSQL).
+- The app starts with empty tables — seed data via the API endpoints.
+
+### Core API
+
+```text
+POST /api/demo-imports                         { "portfolioId": "<uuid>" }
+GET  /api/portfolios/:id/dashboard?asOfDate=YYYY-MM-DD
+GET  /api/portfolios/:id/ledger
+POST /api/portfolios/:id/entries
+POST /api/portfolios/:id/entries/batch
+POST /api/portfolios/:id/time-travel-reports
+GET  /api/time-travel-reports/:reportId
+POST /api/agent/chat                           { "message": "..." }
+```
+
+### V1 AI-Native API
+
+```text
+POST /api/v1/onboarding/insight
+POST /api/v1/onboarding/final-insight
+POST /api/v1/onboarding/complete
+GET  /api/v1/context
+POST /api/v1/context/inferences/:id/confirm
+POST /api/v1/context/inferences/:id/deny
+POST /api/v1/context/memories/:id/archive
+POST /api/v1/context/principles/:id/toggle
+DELETE /api/v1/context/principles/:id
+POST /api/v1/context/behaviors/:id/toggle
+POST /api/v1/context/corrections
+GET  /api/v1/home/daily-performance
+GET  /api/v1/home/scenario
+POST /api/v1/home/action
+GET  /api/v1/performance/timeline
+GET  /api/v1/performance/events/:date
+GET  /api/v1/conversations
+POST /api/v1/conversations
+POST /api/v1/conversations/:id/messages
+POST /api/v1/conversations/:id/resume
+POST /api/v1/conversations/:id/select
+```
 
 ## Non-negotiable behavior
 
@@ -60,12 +119,12 @@ The report request body is `{ "securityId": "2330", "asOfDate": "YYYY-MM-DD" }`.
 
 [C4 handoff](architecture/c4-model.md) and [LikeC4 source](architecture/ledger-book.c4) describe the persistent target MVP:
 
-- PostgreSQL: immutable ledger, prices, evidence, snapshots, and report audit data.
-- Redis: dashboard and passed-report cache only; not a quote cache for this seeded demo.
+- PostgreSQL: immutable ledger, prices, evidence, snapshots, report audit, V1 user context.
+- Redis: dashboard and passed-report cache only (future).
 - AWS Bedrock: external AgentCore and Knowledge Base containers. The API calls AgentCore synchronously; the seed loader indexes authorized RAG chunks.
 - No queue, worker, authentication, live quote API, or mixed-currency support in this MVP.
 
-The C4 model is architecture intent, not a claim about the current in-memory implementation. Update `c4-model.md` and `ledger-book.c4` together when container responsibilities or cross-boundary calls change.
+The C4 model is architecture intent, not a claim about every feature being production-ready. Update `c4-model.md` and `ledger-book.c4` together when container responsibilities or cross-boundary calls change.
 
 Validate diagram changes:
 
