@@ -9,7 +9,7 @@
  * Generation: Amazon Bedrock Nova Pro via Converse API.
  */
 
-import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { BedrockRuntimeClient, ConverseStreamCommand } from "@aws-sdk/client-bedrock-runtime";
 import { defaultProvider } from "@aws-sdk/credential-provider-node";
 import { SignatureV4 } from "@smithy/signature-v4";
 import { Sha256 } from "@aws-crypto/sha256-js";
@@ -312,11 +312,14 @@ async function queryStockData(stockCodes: string[]): Promise<string> {
   return sections.join("\n");
 }
 
-// ─── Model Invocation ───────────────────────────────────────────────────────
+// ─── Model Invocation (Streaming) ───────────────────────────────────────────
 
-async function invokeModel(prompt: string, context: string): Promise<string> {
+async function* invokeModelStream(
+  prompt: string,
+  context: string,
+): AsyncGenerator<string, void, unknown> {
   const response = await bedrockClient.send(
-    new ConverseCommand({
+    new ConverseStreamCommand({
       modelId: MODEL_ID,
       system: [{ text: SYSTEM_PROMPT }],
       messages: [
@@ -333,16 +336,23 @@ async function invokeModel(prompt: string, context: string): Promise<string> {
     }),
   );
 
-  const output = response.output?.message?.content?.[0];
-  if (output && "text" in output) {
-    return output.text ?? "無法生成回應";
+  const stream = response.stream;
+  if (!stream) {
+    yield "無法生成回應";
+    return;
   }
-  return "無法生成回應";
+
+  for await (const event of stream) {
+    if (event.contentBlockDelta?.delta && "text" in event.contentBlockDelta.delta) {
+      const text = event.contentBlockDelta.delta.text;
+      if (text) yield text;
+    }
+  }
 }
 
-// ─── Request Handler ────────────────────────────────────────────────────────
+// ─── Request Handler (Streaming SSE) ────────────────────────────────────────
 
-async function handleInvocation(body: string): Promise<string> {
+async function handleStreamInvocation(body: string, res: http.ServerResponse): Promise<void> {
   let prompt: string;
   try {
     const payload = JSON.parse(body);
@@ -357,9 +367,19 @@ async function handleInvocation(body: string): Promise<string> {
   console.log(`[invoke] detected stocks: ${stockCodes.join(", ") || "(none)"}`);
 
   const context = await queryStockData(stockCodes);
-  const result = await invokeModel(prompt, context);
 
-  return JSON.stringify({ result });
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  for await (const chunk of invokeModelStream(prompt, context)) {
+    res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+  }
+
+  res.write("data: [DONE]\n\n");
+  res.end();
 }
 
 // ─── HTTP Server (AgentCore Contract) ───────────────────────────────────────
@@ -372,7 +392,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Invocations
+  // Streaming invocations
   if (req.url === "/invocations" && req.method === "POST") {
     let body = "";
     req.on("data", (chunk) => {
@@ -380,14 +400,16 @@ const server = http.createServer(async (req, res) => {
     });
     req.on("end", async () => {
       try {
-        const result = await handleInvocation(body);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        await handleStreamInvocation(body, res);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         console.error(`[error] ${message}`);
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: message }));
+        if (!res.headersSent) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: message }));
+        } else {
+          res.end();
+        }
       }
     });
     return;
