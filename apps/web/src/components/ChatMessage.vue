@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { Sparkles, UserRound } from "lucide-vue-next";
+
 defineProps<{ role: "user" | "agent" }>();
 </script>
 <template>
   <div class="msg" :class="[`msg--${role}`]">
-    <div class="avatar">{{ role === "user" ? "👤" : "🪞" }}</div>
+    <div class="avatar">
+      <UserRound v-if="role === 'user'" :size="18" :stroke-width="1.75" />
+      <Sparkles v-else :size="18" :stroke-width="1.75" />
+    </div>
     <div class="body"><slot /></div>
   </div>
 </template>
@@ -50,8 +55,12 @@ defineProps<{ role: "user" | "agent" }>();
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
   border-radius: 50%;
   background: var(--neutral-subtle);
+  color: var(--muted);
+}
+.msg--agent .avatar {
+  background: var(--brand-light, var(--primary-subtle));
+  color: var(--action-primary);
 }
 </style>
