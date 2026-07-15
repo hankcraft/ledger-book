@@ -8,10 +8,21 @@ defineProps<{ insight: string }>();
 </template>
 <style scoped>
 .insight-card {
-  background: var(--brand-light);
-  border-radius: var(--radius-md);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
   padding: var(--space-5) var(--space-4);
-  border-left: 4px solid var(--action-primary);
+  border-left: 4px solid var(--primary);
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  border-left: 4px solid var(--primary);
+  transition:
+    transform var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.insight-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .insight-text {

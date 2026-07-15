@@ -34,7 +34,8 @@ defineProps<{
   margin: 0;
   font-size: var(--text-heading);
   font-weight: var(--weight-bold);
-  line-height: var(--leading-tight);
+  line-height: var(--leading-snug);
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 

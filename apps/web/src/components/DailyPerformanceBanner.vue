@@ -43,11 +43,20 @@ const diffText = computed(() => {
 .banner {
   padding: var(--space-3) var(--space-4);
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  transition:
+    transform var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.banner:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .portfolio-row {

@@ -371,15 +371,19 @@ onMounted(async () => {
 .send-btn {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-pill);
-  background: var(--action-primary);
+  background: var(--gradient-primary);
   color: var(--on-ink);
   font-size: var(--text-caption);
   font-weight: var(--weight-semibold);
-  transition: background var(--duration-fast);
+  box-shadow: var(--shadow-button);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .send-btn:hover:not(:disabled) {
-  background: var(--action-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
 }
 
 /* ─── Pills (shared between empty state and inline) ─── */
