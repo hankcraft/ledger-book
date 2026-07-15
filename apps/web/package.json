@@ -9,9 +9,9 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@ledger-book/contracts": "workspace:*",
-    "echarts": "6.1.0",
-    "vue": "3.5.39"
+    "lucide-vue-next": "0.475.0",
+    "vue": "3.5.39",
+    "vue-router": "4.5.1"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.7",

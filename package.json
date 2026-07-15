@@ -6,9 +6,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun --filter '@ledger-book/api' --filter '@ledger-book/web' --parallel dev",
+    "dev": "bun --filter '@ledger-book/api' --filter '@ledger-book/web' --filter '@ledger-book/agent' --parallel dev",
     "build": "bun --filter '@ledger-book/contracts' typecheck && bun --filter '@ledger-book/api' build && bun --filter '@ledger-book/web' build && bun --filter '@ledger-book/agent' build",
-    "test": "bun --filter '@ledger-book/api' test",
+    "test": "bun --filter '@ledger-book/api' test && bun --filter '@ledger-book/web' test",
     "typecheck": "bun --filter '@ledger-book/contracts' typecheck && bun --filter '@ledger-book/api' typecheck && bun --filter '@ledger-book/web' typecheck && bun --filter '@ledger-book/agent' typecheck",
     "lint": "oxlint apps packages",
     "lint:fix": "oxlint --fix apps packages",

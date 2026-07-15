@@ -122,7 +122,32 @@ export interface TimeTravelReport {
   complianceStatus: "passed" | "rejected";
 }
 
+export interface CreateEntryRequest {
+  occurredOn: string;
+  entryType: LedgerEntryType;
+  securityId?: string;
+  quantity?: number;
+  unitPrice?: number;
+  grossCashAmount: number;
+  feeAmount: number;
+}
+
+export interface CreateEntryResult {
+  entry: LedgerEntry;
+}
+
+export interface BatchCreateRequest {
+  entries: CreateEntryRequest[];
+}
+
+export interface BatchCreateResult {
+  created: LedgerEntry[];
+  errors: Array<{ index: number; message: string }>;
+}
+
 export interface ApiError {
   code: string;
   message: string;
 }
+
+export * from "./v1";

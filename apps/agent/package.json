@@ -4,8 +4,8 @@
   "description": "CMoney 持股分析 Agent — AgentCore Runtime (Node 22)",
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/agent.ts",
-    "build": "bun build ./src/agent.ts --outdir ./dist --target node --env-file .env",
+    "dev": "bun --watch --env-file ../../.env src/agent.ts",
+    "build": "bun build --env-file ../../.env ./src/agent.ts --outdir ./dist --target node",
     "typecheck": "tsc --noEmit",
     "package": "bun run build && cd dist && zip -r ../deployment_package.zip agent.js",
     "deploy": "bun run package && bun scripts/deploy.mjs",

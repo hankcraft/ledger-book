@@ -2,6 +2,8 @@ import { calculateTimeWeightedReturn } from "@railpath/finance-toolkit";
 import {
   DEMO_PORTFOLIO_ID,
   type ApiError,
+  type BatchCreateResult,
+  type CreateEntryRequest,
   type Dashboard,
   type DemoImportResult,
   type EvidenceCitation,
@@ -42,46 +44,49 @@ interface Price {
 }
 
 const prices: readonly Price[] = [
-  { symbol: "0050", date: "2024-01-02", close: 145 },
-  { symbol: "00878", date: "2024-01-02", close: 20.5 },
-  { symbol: "2330", date: "2024-01-02", close: 590 },
-  { symbol: "2317", date: "2024-01-02", close: 102 },
-  { symbol: "2454", date: "2024-01-02", close: 900 },
-  { symbol: "0050", date: "2024-04-30", close: 166 },
-  { symbol: "00878", date: "2024-04-30", close: 21.8 },
-  { symbol: "2330", date: "2024-04-30", close: 780 },
-  { symbol: "2317", date: "2024-04-30", close: 164 },
-  { symbol: "2454", date: "2024-04-30", close: 1_000 },
-  { symbol: "0050", date: "2024-08-30", close: 185 },
-  { symbol: "00878", date: "2024-08-30", close: 22.1 },
-  { symbol: "2330", date: "2024-08-30", close: 970 },
-  { symbol: "2317", date: "2024-08-30", close: 185 },
-  { symbol: "2454", date: "2024-08-30", close: 1_200 },
-  { symbol: "0050", date: "2024-12-31", close: 192 },
-  { symbol: "00878", date: "2024-12-31", close: 21.7 },
-  { symbol: "2330", date: "2024-12-31", close: 1_060 },
-  { symbol: "2317", date: "2024-12-31", close: 180 },
-  { symbol: "2454", date: "2024-12-31", close: 1_350 },
-  { symbol: "0050", date: "2025-03-31", close: 178 },
-  { symbol: "00878", date: "2025-03-31", close: 20.7 },
-  { symbol: "2330", date: "2025-03-31", close: 960 },
-  { symbol: "2317", date: "2025-03-31", close: 150 },
-  { symbol: "2454", date: "2025-03-31", close: 1_250 },
-  { symbol: "0050", date: "2025-06-30", close: 194 },
-  { symbol: "00878", date: "2025-06-30", close: 21.3 },
-  { symbol: "2330", date: "2025-06-30", close: 1_080 },
-  { symbol: "2317", date: "2025-06-30", close: 165 },
-  { symbol: "2454", date: "2025-06-30", close: 1_450 },
-  { symbol: "0050", date: "2025-09-30", close: 202 },
-  { symbol: "00878", date: "2025-09-30", close: 21.8 },
-  { symbol: "2330", date: "2025-09-30", close: 1_200 },
-  { symbol: "2317", date: "2025-09-30", close: 185 },
-  { symbol: "2454", date: "2025-09-30", close: 1_600 },
-  { symbol: "0050", date: "2025-12-31", close: 210 },
-  { symbol: "00878", date: "2025-12-31", close: 22.5 },
-  { symbol: "2330", date: "2025-12-31", close: 1_350 },
-  { symbol: "2317", date: "2025-12-31", close: 200 },
-  { symbol: "2454", date: "2025-12-31", close: 1_800 },
+  // All prices from CMoney 01_Price_Valuation_2025.csv
+  // 0050 split-adjusted (÷4) before 2025-06-11 for consistent quantity math
+  { symbol: "0050", date: "2025-01-02", close: 48.51 },
+  { symbol: "00878", date: "2025-01-02", close: 22.07 },
+  { symbol: "2330", date: "2025-01-02", close: 1_065 },
+  { symbol: "2317", date: "2025-01-02", close: 182.5 },
+  { symbol: "2454", date: "2025-01-02", close: 1_350 },
+  { symbol: "0050", date: "2025-03-31", close: 43.19 },
+  { symbol: "00878", date: "2025-03-31", close: 21.1 },
+  { symbol: "2330", date: "2025-03-31", close: 910 },
+  { symbol: "2317", date: "2025-03-31", close: 146 },
+  { symbol: "2454", date: "2025-03-31", close: 1_390 },
+  { symbol: "0050", date: "2025-04-30", close: 42.15 },
+  { symbol: "00878", date: "2025-04-30", close: 20.31 },
+  { symbol: "2330", date: "2025-04-30", close: 908 },
+  { symbol: "2317", date: "2025-04-30", close: 141.5 },
+  { symbol: "2454", date: "2025-04-30", close: 1_350 },
+  // Post-split 0050 (actual prices from data)
+  { symbol: "0050", date: "2025-06-30", close: 48.36 },
+  { symbol: "00878", date: "2025-06-30", close: 20.9 },
+  { symbol: "2330", date: "2025-06-30", close: 1_060 },
+  { symbol: "2317", date: "2025-06-30", close: 161 },
+  { symbol: "2454", date: "2025-06-30", close: 1_250 },
+  { symbol: "0050", date: "2025-08-29", close: 52.5 },
+  { symbol: "00878", date: "2025-08-29", close: 20.35 },
+  { symbol: "2330", date: "2025-08-29", close: 1_160 },
+  { symbol: "2317", date: "2025-08-29", close: 203.5 },
+  { symbol: "2454", date: "2025-08-29", close: 1_370 },
+  { symbol: "0050", date: "2025-09-30", close: 57.8 },
+  { symbol: "00878", date: "2025-09-30", close: 21.36 },
+  { symbol: "2330", date: "2025-09-30", close: 1_305 },
+  { symbol: "2317", date: "2025-09-30", close: 216 },
+  { symbol: "2454", date: "2025-09-30", close: 1_315 },
+  { symbol: "0050", date: "2025-10-31", close: 64.75 },
+  { symbol: "00878", date: "2025-10-31", close: 21.72 },
+  { symbol: "2330", date: "2025-10-31", close: 1_500 },
+  { symbol: "2317", date: "2025-10-31", close: 257.5 },
+  { symbol: "2454", date: "2025-10-31", close: 1_310 },
+  { symbol: "0050", date: "2025-12-31", close: 65.6 },
+  { symbol: "00878", date: "2025-12-31", close: 21.71 },
+  { symbol: "2330", date: "2025-12-31", close: 1_550 },
+  { symbol: "2317", date: "2025-12-31", close: 230.5 },
+  { symbol: "2454", date: "2025-12-31", close: 1_430 },
 ];
 
 interface Evidence extends EvidenceCitation {
@@ -92,21 +97,21 @@ const evidence: readonly Evidence[] = [
   {
     id: "evidence-2330-1",
     securityId: "2330",
-    observedOn: "2024-06-27",
+    observedOn: "2025-06-27",
     source: "CMoney 籌碼資料",
     label: "三大法人連續兩日淨買超",
   },
   {
     id: "evidence-2330-2",
     securityId: "2330",
-    observedOn: "2024-06-28",
+    observedOn: "2025-06-28",
     source: "CMoney 社群資料",
     label: "討論量較前五日均值增加",
   },
   {
     id: "evidence-00878-1",
     securityId: "00878",
-    observedOn: "2024-06-28",
+    observedOn: "2025-06-28",
     source: "CMoney 籌碼資料",
     label: "受益人數與成交量皆高於月初",
   },
@@ -230,6 +235,9 @@ export interface DemoStore {
   createReport(securityId: SecurityId, asOfDate: string): TimeTravelReport | undefined;
   getReport(reportId: string): TimeTravelReport | undefined;
   hasImported(): boolean;
+  createEntry(request: CreateEntryRequest): LedgerEntry;
+  createEntries(requests: CreateEntryRequest[]): BatchCreateResult;
+  hasEntries(): boolean;
 }
 
 export function createDemoStore(): DemoStore {
@@ -253,7 +261,7 @@ export function createDemoStore(): DemoStore {
           0,
         );
       const current = priceOnOrBefore(security.id, asOfDate);
-      const initial = priceOnOrBefore(security.id, "2024-01-02");
+      const initial = priceOnOrBefore(security.id, "2025-01-02");
 
       if (quantity <= 0 || !current || !initial) return undefined;
 
@@ -276,7 +284,7 @@ export function createDemoStore(): DemoStore {
     if (!imported) return { state: "empty", portfolio };
 
     const dates = knownPriceDates(requestedDate);
-    const initialBenchmark = priceOnOrBefore("0050", "2024-01-02");
+    const initialBenchmark = priceOnOrBefore("0050", "2025-01-02");
     if (dates.length === 0 || !initialBenchmark) return undefined;
 
     const snapshotDate = dates.at(-1);
@@ -406,6 +414,53 @@ export function createDemoStore(): DemoStore {
     hasImported() {
       return imported;
     },
+    createEntry(request: CreateEntryRequest): LedgerEntry {
+      const entry: LedgerEntry = {
+        id: `entry-${String(entries.length + 1).padStart(3, "0")}`,
+        portfolioId: DEMO_PORTFOLIO_ID,
+        sequence: entries.length + 1,
+        occurredOn: request.occurredOn,
+        entryType: request.entryType,
+        grossCashAmount: request.grossCashAmount,
+        feeAmount: request.feeAmount,
+      };
+      if (request.securityId !== undefined) entry.securityId = request.securityId;
+      if (request.quantity !== undefined) entry.quantity = request.quantity;
+      if (request.unitPrice !== undefined) entry.unitPrice = request.unitPrice;
+      entries.push(entry);
+      if (!imported) imported = true;
+      return freezeEntry(entry);
+    },
+    createEntries(requests: CreateEntryRequest[]): BatchCreateResult {
+      const created: LedgerEntry[] = [];
+      const errors: Array<{ index: number; message: string }> = [];
+      for (let i = 0; i < requests.length; i++) {
+        const request = requests[i]!;
+        try {
+          const entry: LedgerEntry = {
+            id: `entry-${String(entries.length + 1).padStart(3, "0")}`,
+            portfolioId: DEMO_PORTFOLIO_ID,
+            sequence: entries.length + 1,
+            occurredOn: request.occurredOn,
+            entryType: request.entryType,
+            grossCashAmount: request.grossCashAmount,
+            feeAmount: request.feeAmount,
+          };
+          if (request.securityId !== undefined) entry.securityId = request.securityId;
+          if (request.quantity !== undefined) entry.quantity = request.quantity;
+          if (request.unitPrice !== undefined) entry.unitPrice = request.unitPrice;
+          entries.push(entry);
+          if (!imported) imported = true;
+          created.push(freezeEntry(entry));
+        } catch (err) {
+          errors.push({ index: i, message: err instanceof Error ? err.message : "未知錯誤" });
+        }
+      }
+      return { created, errors };
+    },
+    hasEntries() {
+      return entries.length > 0;
+    },
   };
 }
 
@@ -413,8 +468,11 @@ function error(code: string, message: string): ApiError {
   return { code, message };
 }
 
+import { cors } from "@elysiajs/cors";
+
 export function createApp(store = createDemoStore()) {
   return new Elysia({ name: "ledger-book-api" })
+    .use(cors({ origin: true }))
     .get("/api/health", () => ({ ok: true }))
     .post(
       "/api/demo-imports",
@@ -466,12 +524,79 @@ export function createApp(store = createDemoStore()) {
         set.status = 404;
         return error("portfolio_not_found", "找不到投資組合。");
       }
-      if (!store.hasImported()) {
-        set.status = 409;
-        return error("demo_import_required", "請先匯入 Fake Demo。");
+      if (!store.hasImported() && !store.hasEntries()) {
+        return [];
       }
       return store.getLedgerEntries();
     })
+    .post(
+      "/api/portfolios/:portfolioId/entries",
+      ({ params, body, set }) => {
+        if (params.portfolioId !== DEMO_PORTFOLIO_ID) {
+          set.status = 404;
+          return error("portfolio_not_found", "找不到投資組合。");
+        }
+        if (!isIsoDate(body.occurredOn)) {
+          set.status = 400;
+          return error("invalid_date", "occurredOn 必須是有效的 YYYY-MM-DD。");
+        }
+        if (!isLedgerEntryType(body.entryType)) {
+          set.status = 400;
+          return error("invalid_entry_type", "entryType 無效。");
+        }
+        const entry = store.createEntry(body as unknown as CreateEntryRequest);
+        set.status = 201;
+        return { entry };
+      },
+      {
+        body: t.Object({
+          occurredOn: t.String({ minLength: 1 }),
+          entryType: t.String({ minLength: 1 }),
+          securityId: t.Optional(t.String()),
+          quantity: t.Optional(t.Number()),
+          unitPrice: t.Optional(t.Number()),
+          grossCashAmount: t.Number(),
+          feeAmount: t.Number(),
+        }),
+      },
+    )
+    .post(
+      "/api/portfolios/:portfolioId/entries/batch",
+      ({ params, body, set }) => {
+        if (params.portfolioId !== DEMO_PORTFOLIO_ID) {
+          set.status = 404;
+          return error("portfolio_not_found", "找不到投資組合。");
+        }
+        if (!Array.isArray(body.entries) || body.entries.length === 0) {
+          set.status = 400;
+          return error("empty_batch", "批次不能為空。");
+        }
+        for (const entry of body.entries) {
+          if (!isIsoDate(entry.occurredOn) || !isLedgerEntryType(entry.entryType)) {
+            set.status = 400;
+            return error("invalid_entry", "批次中含有無效的日期或類型。");
+          }
+        }
+        const result = store.createEntries(body.entries as unknown as CreateEntryRequest[]);
+        set.status = 201;
+        return result;
+      },
+      {
+        body: t.Object({
+          entries: t.Array(
+            t.Object({
+              occurredOn: t.String({ minLength: 1 }),
+              entryType: t.String({ minLength: 1 }),
+              securityId: t.Optional(t.String()),
+              quantity: t.Optional(t.Number()),
+              unitPrice: t.Optional(t.Number()),
+              grossCashAmount: t.Number(),
+              feeAmount: t.Number(),
+            }),
+          ),
+        }),
+      },
+    )
     .post(
       "/api/portfolios/:portfolioId/time-travel-reports",
       ({ params, body, set }) => {
@@ -510,5 +635,83 @@ export function createApp(store = createDemoStore()) {
         return error("report_not_found", "找不到回溯報告。");
       }
       return report;
-    });
+    })
+    .post(
+      "/api/agent/chat",
+      async ({ body, set }) => {
+        if (!store.hasImported()) {
+          set.status = 409;
+          return error("demo_import_required", "請先匯入 Fake Demo。");
+        }
+
+        const agentEndpoint = Bun.env.AGENT_ENDPOINT ?? "http://localhost:8080";
+        const ledger = store.getLedgerEntries();
+        const dashboard = store.getDashboard("2025-12-31");
+
+        const holdingsSummary =
+          dashboard?.state === "ready"
+            ? dashboard.holdings
+                .map(
+                  (h) =>
+                    `${h.symbol} ${h.name}: ${h.quantity}股, 市值${h.marketValue}, 漲跌${h.changePercent}%`,
+                )
+                .join("\n")
+            : "";
+
+        const ledgerSummary = ledger
+          .slice(-20)
+          .map(
+            (e) =>
+              `${e.occurredOn} ${e.entryType} ${e.securityId ?? ""} ${e.quantity ?? ""} $${e.grossCashAmount}`,
+          )
+          .join("\n");
+
+        const context = [
+          "## 用戶持股組合",
+          holdingsSummary,
+          "",
+          "## 最近交易紀錄（最近20筆）",
+          ledgerSummary,
+        ].join("\n");
+
+        const prompt = `${context}\n\n---\n\n用戶提問：${body.message}`;
+
+        try {
+          const res = await fetch(`${agentEndpoint}/invocations`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
+          });
+
+          if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            console.error(`[agent-chat] Agent responded ${res.status}: ${text.slice(0, 200)}`);
+            set.status = 502;
+            return error("agent_unavailable", "AI 助手暫時無法回應，請稍後再試。");
+          }
+
+          if (!res.body) {
+            set.status = 502;
+            return error("agent_invalid_response", "AI 助手回應格式異常。");
+          }
+
+          set.headers["content-type"] = "text/event-stream";
+          set.headers["cache-control"] = "no-cache";
+          set.headers["connection"] = "keep-alive";
+
+          return new Response(res.body, {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+            },
+          });
+        } catch (err) {
+          console.error(`[agent-chat] ${err instanceof Error ? err.message : err}`);
+          set.status = 502;
+          return error("agent_unavailable", "AI 助手暫時無法回應，請稍後再試。");
+        }
+      },
+      { body: t.Object({ message: t.String({ minLength: 1 }) }) },
+    );
 }

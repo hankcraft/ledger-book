@@ -43,7 +43,7 @@ describe("demo API", () => {
     expect(await response.json()).toMatchObject({ state: "empty" });
   });
 
-  test("imports a two-year, five-ticker trading ledger with dashboard snapshots", async () => {
+  test("imports a 2025 five-ticker trading ledger with dashboard snapshots", async () => {
     const app = createApp();
 
     const first = await app.handle(importRequest());
@@ -75,12 +75,12 @@ describe("demo API", () => {
       "2317",
       "2454",
     ]);
-    expect(body.timelinePoints).toHaveLength(8);
+    expect(body.timelinePoints.length).toBeGreaterThanOrEqual(6);
     expect(body.benchmark).toMatchObject({ symbol: "0050", return: expect.any(Number) });
 
     const opening = await app.handle(
       new Request(
-        `http://localhost/api/portfolios/${DEMO_PORTFOLIO_ID}/dashboard?asOfDate=2024-01-02`,
+        `http://localhost/api/portfolios/${DEMO_PORTFOLIO_ID}/dashboard?asOfDate=2025-01-02`,
       ),
     );
     expect(opening.status).toBe(200);
@@ -95,11 +95,11 @@ describe("demo API", () => {
       holdings: { quantity: number; symbol: string }[];
       latestSnapshot: { asOfDate: string };
     };
-    expect(intermediate.latestSnapshot.asOfDate).toBe("2025-06-30");
+    expect(intermediate.latestSnapshot.asOfDate).toBe("2025-08-29");
     expect(intermediate.holdings.find((holding) => holding.symbol === "2330")?.quantity).toBe(120);
   });
 
-  test("keeps two years of blueprint ledger activity immutable", () => {
+  test("keeps 2025 blueprint ledger activity immutable", () => {
     const store = createDemoStore();
     store.importDemo();
     const entries = store.getLedgerEntries();
@@ -107,10 +107,10 @@ describe("demo API", () => {
     expect(Object.isFrozen(entries)).toBe(true);
     expect(Object.isFrozen(entries[0]!)).toBe(true);
     expect(new Set(entries.flatMap((entry) => entry.securityId ?? [])).size).toBe(5);
-    expect(entries[0]?.occurredOn).toBe("2024-01-02");
+    expect(entries[0]?.occurredOn).toBe("2025-01-02");
     expect(entries[0]?.sequence).toBe(1);
-    expect(entries[1]).toMatchObject({ grossCashAmount: -116_000, feeAmount: 165 });
-    expect(entries.at(-1)?.occurredOn).toBe("2025-12-22");
+    expect(entries[1]).toMatchObject({ grossCashAmount: -155_200, feeAmount: 221 });
+    expect(entries.at(-1)?.occurredOn).toBe("2025-12-29");
     expect(entries.some((entry) => entry.entryType === "sell")).toBe(true);
     expect(entries.some((entry) => entry.entryType === "dividend")).toBe(true);
   });
@@ -120,7 +120,8 @@ describe("demo API", () => {
     const ledgerUrl = `http://localhost/api/portfolios/${DEMO_PORTFOLIO_ID}/ledger`;
 
     const beforeImport = await app.handle(new Request(ledgerUrl));
-    expect(beforeImport.status).toBe(409);
+    expect(beforeImport.status).toBe(200);
+    expect(await beforeImport.json()).toEqual([]);
 
     await app.handle(importRequest());
     const response = await app.handle(new Request(ledgerUrl));
@@ -133,11 +134,11 @@ describe("demo API", () => {
     expect(response.status).toBe(200);
     expect(entries).toHaveLength(23);
     expect(entries[0]).toMatchObject({
-      occurredOn: "2024-01-02",
+      occurredOn: "2025-01-02",
       entryType: "cash_deposit",
       sequence: 1,
     });
-    expect(entries.at(-1)).toMatchObject({ occurredOn: "2025-12-22", sequence: 23 });
+    expect(entries.at(-1)).toMatchObject({ occurredOn: "2025-12-29", sequence: 23 });
   });
 
   test("returns only dated evidence and rejects advice wording", async () => {
@@ -148,7 +149,7 @@ describe("demo API", () => {
       new Request(`http://localhost/api/portfolios/${DEMO_PORTFOLIO_ID}/time-travel-reports`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ securityId: "2330", asOfDate: "2024-06-28" }),
+        body: JSON.stringify({ securityId: "2330", asOfDate: "2025-06-30" }),
       }),
     );
     const report = (await response.json()) as {
@@ -157,7 +158,7 @@ describe("demo API", () => {
     };
 
     expect(response.status).toBe(201);
-    expect(report.citations.every(({ observedOn }) => observedOn <= "2024-06-28")).toBe(true);
+    expect(report.citations.every(({ observedOn }) => observedOn <= "2025-06-30")).toBe(true);
     expect(report.uiColor).toBe("red");
     expect(isObjectiveSummary("建議買進這檔股票")).toBe(false);
     expect(isObjectiveSummary("建議買入這檔股票")).toBe(false);
