@@ -468,8 +468,11 @@ function error(code: string, message: string): ApiError {
   return { code, message };
 }
 
+import { cors } from "@elysiajs/cors";
+
 export function createApp(store = createDemoStore()) {
   return new Elysia({ name: "ledger-book-api" })
+    .use(cors({ origin: true }))
     .get("/api/health", () => ({ ok: true }))
     .post(
       "/api/demo-imports",

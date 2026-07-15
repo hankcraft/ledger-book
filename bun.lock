@@ -29,6 +29,7 @@
     "apps/api": {
       "name": "@ledger-book/api",
       "dependencies": {
+        "@elysiajs/cors": "1.3.2",
         "@ledger-book/contracts": "workspace:*",
         "@railpath/finance-toolkit": "0.5.4",
         "elysia": "1.4.29",
@@ -103,6 +104,8 @@
     "@babel/types": ["@babel/types@7.29.7", "", { "dependencies": { "@babel/helper-string-parser": "^7.29.7", "@babel/helper-validator-identifier": "^7.29.7" } }, "sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA=="],
 
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
+
+    "@elysiajs/cors": ["@elysiajs/cors@1.3.2", "", { "peerDependencies": { "elysia": ">= 1.3.0" } }, "sha512-auURNrlfBOLhJ022HgFiqNV8uEYa1Tw+l0P1pN9AqrpQgsrrbNSqaJvABYEolCCRsWJe7t5ndJPhVbECF3sRRw=="],
 
     "@emnapi/core": ["@emnapi/core@1.11.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ=="],
 
