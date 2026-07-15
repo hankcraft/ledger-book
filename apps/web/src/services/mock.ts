@@ -184,7 +184,7 @@ class MockContextService implements IContextService {
       id: `p-from-${id}`,
       statement: inference.statement,
       confirmedAt: new Date().toISOString().slice(0, 10),
-      source: "AI 推論確認",
+      source: "對話確認",
       paused: false,
       badge: "剛確認",
     };

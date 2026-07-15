@@ -88,7 +88,7 @@ export function useAppStore() {
         if (decision.shouldClearCompletionMarker) clearOnboardingCompletion();
         state.onboardingComplete = decision.onboardingComplete;
         if (decision.shouldReportLoadError) {
-          showToast("無法載入上次的投資情境，請稍後重試。");
+          showToast("暫時載入不了上次的資料，請稍後重試。");
         }
       } finally {
         state.loading = false;
@@ -105,7 +105,7 @@ export function useAppStore() {
       applyContext(await api.onboarding.completeOnboarding(input));
       state.onboardingComplete = true;
       writeOnboardingCompletion();
-      showToast("歡迎！我已經開始理解你的投資狀態。");
+      showToast("歡迎！我已經開始整理你的投資狀況。");
     } finally {
       state.loading = false;
     }
@@ -117,7 +117,7 @@ export function useAppStore() {
       applyContext(await api.context.getContext());
       state.onboardingComplete = true;
       writeOnboardingCompletion();
-      showToast("已跳過設定，使用預設範例庫存。隨時可以到自畫像修改。");
+      showToast("已跳過設定，使用範例庫存。隨時可以到「我的資料」修改。");
     } finally {
       state.loading = false;
     }
@@ -131,9 +131,9 @@ export function useAppStore() {
       const { newPrinciple } = await api.context.confirmInference(id);
       inference.status = "confirmed";
       state.principles.push(newPrinciple);
-      showToast("已確認並加入原則層 ✓");
+      showToast("已確認並加入你的原則 ✓");
     } catch {
-      showToast("操作失敗，請稍後再試。");
+      showToast("沒成功，等一下再試？");
     }
   }
 
@@ -147,7 +147,7 @@ export function useAppStore() {
       inference.denyReason = reason;
       showToast("已記錄你的回饋。");
     } catch {
-      showToast("操作失敗，請稍後再試。");
+      showToast("沒成功，等一下再試？");
     }
   }
 
@@ -159,7 +159,7 @@ export function useAppStore() {
       await api.context.archiveMemory(id);
       memory.archived = true;
     } catch {
-      showToast("操作失敗，請稍後再試。");
+      showToast("沒成功，等一下再試？");
     }
   }
 
@@ -171,7 +171,7 @@ export function useAppStore() {
       const updated = await api.context.togglePrinciple(id);
       principle.paused = updated.paused;
     } catch {
-      showToast("操作失敗，請稍後再試。");
+      showToast("沒成功，等一下再試？");
     }
   }
 
@@ -181,7 +181,7 @@ export function useAppStore() {
       const index = state.principles.findIndex((item) => item.id === id);
       if (index !== -1) state.principles.splice(index, 1);
     } catch {
-      showToast("操作失敗，請稍後再試。");
+      showToast("沒成功，等一下再試？");
     }
   }
 
@@ -193,7 +193,7 @@ export function useAppStore() {
       const updated = await api.context.toggleBehaviorExclusion(id);
       behavior.excluded = updated.excluded;
     } catch {
-      showToast("操作失敗，請稍後再試。");
+      showToast("沒成功，等一下再試？");
     }
   }
 
@@ -201,10 +201,10 @@ export function useAppStore() {
     try {
       const result = await api.context.submitCorrection(text);
       applyContextPatch(result.updatedContext);
-      showToast("已更新 AI 對你的理解。");
+      showToast("已更新你的資料。");
       return result.response;
     } catch {
-      showToast("修正送出失敗，請稍後再試。");
+      showToast("修正沒送出，等一下再試？");
       return null;
     }
   }

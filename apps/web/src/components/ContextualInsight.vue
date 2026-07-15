@@ -2,7 +2,7 @@
 defineProps<{ insight: string }>();
 </script>
 <template>
-  <section class="insight-card" aria-label="AI 主要判斷">
+  <section class="insight-card" aria-label="主要觀察">
     <p class="insight-text">{{ insight }}</p>
   </section>
 </template>
