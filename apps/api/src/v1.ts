@@ -535,6 +535,78 @@ export function createV1Routes(store = createV1Store()) {
         },
         { body: t.Object({ action: t.String() }) },
       )
+      // ─── Performance ───────────────────────────────────────
+      .get("/performance/timeline", () => {
+        // Generate 30-day cumulative return timeline
+        const points: Array<{ date: string; portfolioReturn: number; benchmarkReturn: number }> =
+          [];
+        const today = new Date();
+        let portfolioAcc = 0;
+        let benchmarkAcc = 0;
+
+        for (let i = 29; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().slice(0, 10);
+
+          // Deterministic pseudo-random based on day index
+          const seed = (29 - i) * 7 + 3;
+          const pDaily = (((seed * 13 + 7) % 20) - 9) / 10;
+          const bDaily = (((seed * 11 + 5) % 14) - 6) / 10;
+          portfolioAcc += pDaily;
+          benchmarkAcc += bDaily;
+
+          points.push({
+            date: dateStr,
+            portfolioReturn: Math.round(portfolioAcc * 100) / 100,
+            benchmarkReturn: Math.round(benchmarkAcc * 100) / 100,
+          });
+        }
+
+        return {
+          points,
+          metrics: { xirr: 14.2, twr: 12.8, benchmarkReturn: 9.5 },
+        };
+      })
+      .get("/performance/events/:date", ({ params }) => {
+        // Return event for specific known dates
+        const today = new Date();
+        const eventDates: Record<string, { date: string; type: string; summary: string }> = {};
+
+        const d5 = new Date(today);
+        d5.setDate(d5.getDate() - 24);
+        eventDates[d5.toISOString().slice(0, 10)] = {
+          date: d5.toISOString().slice(0, 10),
+          type: "buy",
+          summary: "買進台積電 2 張，均價 980 元",
+        };
+
+        const d12 = new Date(today);
+        d12.setDate(d12.getDate() - 17);
+        eventDates[d12.toISOString().slice(0, 10)] = {
+          date: d12.toISOString().slice(0, 10),
+          type: "market",
+          summary: "大盤單日跌幅 2.3%，AI 供應鏈全面回調",
+        };
+
+        const d18 = new Date(today);
+        d18.setDate(d18.getDate() - 11);
+        eventDates[d18.toISOString().slice(0, 10)] = {
+          date: d18.toISOString().slice(0, 10),
+          type: "dividend",
+          summary: "長榮配息入帳，每股 3.5 元",
+        };
+
+        const d25 = new Date(today);
+        d25.setDate(d25.getDate() - 4);
+        eventDates[d25.toISOString().slice(0, 10)] = {
+          date: d25.toISOString().slice(0, 10),
+          type: "sell",
+          summary: "賣出聯電 1 張，獲利 3.1%",
+        };
+
+        return eventDates[params.date] ?? null;
+      })
       // ─── Conversations ───────────────────────────────────
       .get("/conversations", () => structuredClone(pastConversations))
       .post(
