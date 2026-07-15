@@ -382,10 +382,6 @@ class MockPerformanceService implements IPerformanceService {
 
   constructor() {
     const points = this.generateTimeline(30);
-    this.timeline = {
-      points,
-      metrics: { xirr: 14.2, twr: 12.8, benchmarkReturn: 9.5 },
-    };
     this.events = new Map([
       [
         points[5]!.date,
@@ -404,6 +400,11 @@ class MockPerformanceService implements IPerformanceService {
         { date: points[25]!.date, type: "sell", summary: "賣出聯電 1 張，獲利 3.1%" },
       ],
     ]);
+    this.timeline = {
+      points,
+      metrics: { xirr: 14.2, twr: 12.8, benchmarkReturn: 9.5 },
+      eventDates: [...this.events.keys()],
+    };
   }
 
   private generateTimeline(days: number) {

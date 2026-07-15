@@ -92,6 +92,7 @@ function createConversationApi(options: ConversationApiOptions = {}): IApiServic
       getPerformanceTimeline: async () => ({
         points: [],
         metrics: { xirr: 0, twr: 0, benchmarkReturn: 0 },
+        eventDates: [],
       }),
       getTimePointEvent: async () => null,
     },

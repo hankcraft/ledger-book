@@ -30,11 +30,12 @@ export function createPerformanceRoutes(
               ? Math.round(Number(dashboard.metrics.benchmarkReturn) * 1000) / 10
               : 0,
           },
+          eventDates: [] as string[],
         };
       }
 
       // Fallback: empty timeline
-      return { points: [], metrics: { xirr: 0, twr: 0, benchmarkReturn: 0 } };
+      return { points: [], metrics: { xirr: 0, twr: 0, benchmarkReturn: 0 }, eventDates: [] as string[] };
     })
     .get("/events/:date", ({ params }) => {
       // Events are stored in ledger — return null if no matching event

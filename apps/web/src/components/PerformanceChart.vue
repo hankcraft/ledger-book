@@ -5,6 +5,7 @@ import type { PerformanceTimelinePoint } from "../services/types";
 const props = defineProps<{
   points: PerformanceTimelinePoint[];
   selectedDate: string | null;
+  eventDates?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -70,6 +71,8 @@ const xLabels = computed(() => {
 });
 
 const zeroY = computed(() => toY(0));
+
+const eventDateSet = computed(() => new Set(props.eventDates ?? []));
 </script>
 
 <template>
@@ -130,16 +133,28 @@ const zeroY = computed(() => toY(0));
     <!-- Portfolio line -->
     <path :d="portfolioPath" class="line-portfolio" fill="none" />
 
-    <!-- Clickable markers -->
+    <!-- Non-event markers (decorative, not clickable) -->
     <circle
       v-for="(point, i) in points"
-      :key="point.date"
+      v-show="!eventDateSet.has(point.date)"
+      :key="'dot-' + point.date"
       :cx="toX(i)"
       :cy="toY(point.portfolioReturn)"
-      :r="selectedDate === point.date ? 5 : 3"
-      :class="['marker', { selected: selectedDate === point.date }]"
-      @click="emit('selectPoint', point.date)"
+      r="2"
+      class="marker-dot"
     />
+
+    <!-- Event markers (clickable) -->
+    <template v-for="(point, i) in points" :key="'ev-' + point.date">
+      <circle
+        v-if="eventDateSet.has(point.date)"
+        :cx="toX(i)"
+        :cy="toY(point.portfolioReturn)"
+        :r="selectedDate === point.date ? 7 : 5"
+        :class="['marker-event', { selected: selectedDate === point.date }]"
+        @click="emit('selectPoint', point.date)"
+      />
+    </template>
   </svg>
 </template>
 
@@ -183,19 +198,27 @@ const zeroY = computed(() => toY(0));
   stroke-dasharray: 4 3;
 }
 
-.marker {
+.marker-dot {
   fill: var(--accent);
+  opacity: 0.4;
+}
+
+.marker-event {
+  fill: var(--brand-accent, #ffb43b);
+  stroke: var(--surface);
+  stroke-width: 2;
   cursor: pointer;
   transition: r 0.15s;
 }
 
-.marker:hover {
-  r: 5;
+.marker-event:hover {
+  r: 7;
 }
 
-.marker.selected {
+.marker-event.selected {
   fill: var(--action-primary);
   stroke: var(--surface);
-  stroke-width: 2;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 3px var(--action-primary));
 }
 </style>
