@@ -46,7 +46,7 @@ defineProps<{ holding: Holding }>();
   color: var(--positive);
 }
 .neg {
-  background: #fef2f2;
+  background: var(--negative-subtle);
   color: var(--negative);
 }
 .bar-row {

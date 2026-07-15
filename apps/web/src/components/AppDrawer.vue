@@ -67,7 +67,7 @@ const emit = defineEmits<{
 .drawer-close {
   color: var(--muted);
   padding: var(--space-2);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-md);
 }
 
 .drawer-close:hover {
