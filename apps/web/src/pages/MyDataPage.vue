@@ -1,63 +1,34 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useRouter } from "vue-router";
 import { Briefcase, BookmarkCheck, BookOpen } from "lucide-vue-next";
 import { useAppStore } from "../composables/useAppStore";
-import CorrectionSheet from "../components/CorrectionSheet.vue";
 import HoldingCard from "../components/HoldingCard.vue";
 import PageHeader from "../components/PageHeader.vue";
 
-const {
-  state,
-  activeMemories,
-  pausePrinciple,
-  deletePrinciple,
-  archiveMemory,
-  submitCorrection,
-  showToast,
-} = useAppStore();
+const router = useRouter();
+const { state, activeMemories, pausePrinciple, deletePrinciple, archiveMemory, logout, showToast } =
+  useAppStore();
 
 const expanded = ref({
   holdings: true,
   principles: true,
   memories: true,
 });
-const correctionOpen = ref(false);
-const correctionSubmitting = ref(false);
-const correctionResponse = ref<string | null>(null);
 
 function openQuickEntry(): void {
-  // Dispatches global drawer open — connected in Task 7
   window.dispatchEvent(new CustomEvent("open-quick-entry"));
-  showToast("新增交易功能即將到來");
 }
 
-async function handleCorrection(text: string): Promise<void> {
-  correctionSubmitting.value = true;
-  correctionResponse.value = await submitCorrection(text);
-  correctionSubmitting.value = false;
-}
-
-function closeCorrection(): void {
-  correctionOpen.value = false;
-  correctionResponse.value = null;
+function handleLogout(): void {
+  logout();
+  router.push("/onboarding");
 }
 </script>
 
 <template>
   <main class="my-data">
-    <PageHeader title="我的資料">
-      <template #action>
-        <button
-          class="header-action-btn"
-          @click="
-            correctionResponse = null;
-            correctionOpen = true;
-          "
-        >
-          修改資料
-        </button>
-      </template>
-    </PageHeader>
+    <PageHeader title="我的資料" />
 
     <!-- Holdings -->
     <section class="section">
@@ -131,13 +102,10 @@ function closeCorrection(): void {
       </div>
     </section>
 
-    <CorrectionSheet
-      :open="correctionOpen"
-      :submitting="correctionSubmitting"
-      :response="correctionResponse"
-      @submit="handleCorrection"
-      @close="closeCorrection"
-    />
+    <!-- Logout -->
+    <section class="logout-section">
+      <button class="logout-btn" @click="handleLogout">登出，重新設定</button>
+    </section>
   </main>
 </template>
 
@@ -148,22 +116,6 @@ function closeCorrection(): void {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-}
-
-.header-action-btn {
-  font-size: var(--text-caption);
-  color: var(--muted);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  transition:
-    border-color var(--duration-fast),
-    color var(--duration-fast);
-}
-
-.header-action-btn:hover:not(:disabled) {
-  border-color: var(--action-primary);
-  color: var(--action-primary);
 }
 
 .section {
@@ -344,5 +296,30 @@ function closeCorrection(): void {
   font-size: var(--text-caption);
   padding: var(--space-4);
   line-height: 1.5;
+}
+
+/* Logout */
+.logout-section {
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
+.logout-btn {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  color: var(--negative);
+  font-size: var(--text-body);
+  font-weight: 500;
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
+}
+
+.logout-btn:hover {
+  background: var(--negative-subtle);
+  border-color: var(--negative);
 }
 </style>

@@ -4,6 +4,7 @@ export interface Holding {
   weight: number;
   cost: number;
   plPercent: number;
+  purchaseDate?: string;
 }
 
 export interface Principle {

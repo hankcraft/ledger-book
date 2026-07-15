@@ -10,9 +10,10 @@ import StockInput from "../components/StockInput.vue";
 import { useAppStore } from "../composables/useAppStore";
 import { useOnboardFlow } from "../composables/useOnboardFlow";
 import { BRAND } from "../constants/brand";
+import { ledgerTemplates } from "../data/ledger-templates";
 
 const router = useRouter();
-const { state, completeOnboarding, skipOnboarding, showToast } = useAppStore();
+const { state, completeOnboarding, skipOnboarding, applyTemplate, showToast } = useAppStore();
 const {
   currentStep,
   currentStepIndex,
@@ -121,6 +122,16 @@ async function handleSkip(): Promise<void> {
     showToast("暫時無法進入，請稍後再試。");
   }
 }
+
+async function handleTemplateSelect(templateId: string): Promise<void> {
+  if (state.loading) return;
+  try {
+    await applyTemplate(templateId);
+    await router.push("/");
+  } catch {
+    showToast("無法套用範本，請稍後再試。");
+  }
+}
 </script>
 
 <template>
@@ -138,6 +149,23 @@ async function handleSkip(): Promise<void> {
               <li v-for="bullet in introBullets" :key="bullet">{{ bullet }}</li>
             </ul>
             <button class="primary-btn" @click="handleStart">開始設定</button>
+
+            <div class="template-section">
+              <p class="template-divider"><span>或者，選擇範本快速開始</span></p>
+              <div class="template-grid">
+                <button
+                  v-for="template in ledgerTemplates"
+                  :key="template.id"
+                  class="template-card"
+                  :disabled="state.loading"
+                  @click="handleTemplateSelect(template.id)"
+                >
+                  <span class="template-icon">{{ template.icon }}</span>
+                  <span class="template-name">{{ template.name }}</span>
+                  <span class="template-tagline">{{ template.tagline }}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </template>
 
@@ -413,5 +441,83 @@ async function handleSkip(): Promise<void> {
 
 .skip-btn:hover:not(:disabled) {
   color: var(--ink);
+}
+
+/* Template selection */
+.template-section {
+  width: 100%;
+  margin-top: var(--space-6);
+}
+
+.template-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+.template-divider::before,
+.template-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.template-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.template-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast),
+    box-shadow var(--duration-fast),
+    transform var(--duration-fast);
+}
+
+.template-card:hover:not(:disabled) {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.template-card:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.template-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.template-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.template-name {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.template-tagline {
+  font-size: var(--text-caption);
+  color: var(--muted);
+  margin-left: auto;
 }
 </style>
