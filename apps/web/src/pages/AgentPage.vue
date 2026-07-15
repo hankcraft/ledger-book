@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import AgentInsightCard from "../components/AgentInsightCard.vue";
@@ -7,6 +7,7 @@ import ChatMessage from "../components/ChatMessage.vue";
 import ConfirmationQuestion from "../components/ConfirmationQuestion.vue";
 import EvidenceCard from "../components/EvidenceCard.vue";
 import MemoryRecall from "../components/MemoryRecall.vue";
+import PageHeader from "../components/PageHeader.vue";
 import PastConversations from "../components/PastConversations.vue";
 import ScenarioComparison from "../components/ScenarioComparison.vue";
 import { useConversation } from "../composables/useConversation";
@@ -19,7 +20,6 @@ const {
   error,
   pastConversations,
   beginNewConversation,
-  startDefaultConversation,
   startNewConversation,
   resumeConversation,
   loadPastConversations,
@@ -30,6 +30,8 @@ const userInput = ref("");
 const historyExpanded = ref(false);
 const selectedOption = ref<string | null>(null);
 const suggestedPills = ["今天有什麼值得注意的？", "上次我們聊到哪？", "最近的操作有什麼趨勢？"];
+
+const isEmpty = computed(() => messages.value.length === 0 && !isPlaying.value);
 
 async function handleSend(): Promise<void> {
   const text = userInput.value.trim();
@@ -47,6 +49,7 @@ async function handlePillClick(pill: string): Promise<void> {
 
 function handleNewConversation(): void {
   selectedOption.value = null;
+  historyExpanded.value = false;
   beginNewConversation();
 }
 
@@ -62,64 +65,108 @@ async function handleSelectOption(option: string): Promise<void> {
   }
 }
 
-async function startInitialConversation(): Promise<void> {
-  const prompt = typeof route.query.prompt === "string" ? route.query.prompt : null;
+onMounted(async () => {
+  void loadPastConversations();
 
+  // Only auto-start if navigated with a prompt query (e.g. from HomePage action)
+  const prompt = typeof route.query.prompt === "string" ? route.query.prompt : null;
   if (prompt) {
     await router.replace({ query: {} });
     await startNewConversation(prompt);
-    return;
   }
-
-  await startDefaultConversation();
-}
-
-onMounted(() => {
-  void startInitialConversation();
-  void loadPastConversations();
 });
 </script>
 
 <template>
   <div class="agent-page">
-    <header class="header">
-      <div class="header-left">
-        <h1 class="title">投資搭檔</h1>
-        <p class="subtitle">和搭檔聊聊</p>
-      </div>
-      <button class="new-conv-btn" :disabled="isPlaying" @click="handleNewConversation">
-        + 新對話
-      </button>
-    </header>
+    <div class="agent-header">
+      <PageHeader title="聊聊">
+        <template #action>
+          <div class="header-actions">
+            <button
+              v-if="pastConversations.length > 0"
+              class="header-icon-btn"
+              :class="{ active: historyExpanded }"
+              aria-label="對話紀錄"
+              @click="historyExpanded = !historyExpanded"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </button>
+            <button
+              class="header-action-btn"
+              :disabled="isPlaying || isEmpty"
+              @click="handleNewConversation"
+            >
+              + 新對話
+            </button>
+          </div>
+        </template>
+      </PageHeader>
 
-    <main class="message-list" aria-live="polite">
-      <ChatMessage v-for="message in messages" :key="message.id" :role="message.role">
-        <p v-if="message.text" class="msg-text">{{ message.text }}</p>
-        <AgentInsightCard v-if="message.card?.type === 'insight'" :data="message.card" />
-        <MemoryRecall v-if="message.card?.type === 'memory-recall'" :data="message.card" />
-        <EvidenceCard v-if="message.card?.type === 'evidence'" :data="message.card" />
-        <ScenarioComparison
-          v-if="message.card?.type === 'scenario-comparison'"
-          :data="message.card"
+      <Transition name="expand">
+        <PastConversations
+          v-if="historyExpanded"
+          class="history-dropdown"
+          :conversations="pastConversations"
+          @resume="handleResumeHistory"
         />
-        <ConfirmationQuestion
-          v-if="message.card?.type === 'confirmation-question'"
-          :data="message.card"
-          :disabled="isPlaying"
-          :selected-option="selectedOption"
-          @select="handleSelectOption"
-        />
-      </ChatMessage>
+      </Transition>
+    </div>
 
-      <div v-if="messages.length === 0" class="empty">
-        <p>想聊什麼都可以，或選一個話題開始。</p>
+    <main class="message-area" aria-live="polite">
+      <!-- Empty state: centered pills -->
+      <div v-if="isEmpty" class="empty-state">
+        <p class="empty-greeting">想聊什麼都可以</p>
+        <div class="empty-pills">
+          <button
+            v-for="pill in suggestedPills"
+            :key="pill"
+            class="pill"
+            @click="handlePillClick(pill)"
+          >
+            {{ pill }}
+          </button>
+        </div>
       </div>
 
-      <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+      <!-- Conversation messages -->
+      <template v-else>
+        <ChatMessage v-for="message in messages" :key="message.id" :role="message.role">
+          <p v-if="message.text" class="msg-text">{{ message.text }}</p>
+          <AgentInsightCard v-if="message.card?.type === 'insight'" :data="message.card" />
+          <MemoryRecall v-if="message.card?.type === 'memory-recall'" :data="message.card" />
+          <EvidenceCard v-if="message.card?.type === 'evidence'" :data="message.card" />
+          <ScenarioComparison
+            v-if="message.card?.type === 'scenario-comparison'"
+            :data="message.card"
+          />
+          <ConfirmationQuestion
+            v-if="message.card?.type === 'confirmation-question'"
+            :data="message.card"
+            :disabled="isPlaying"
+            :selected-option="selectedOption"
+            @select="handleSelectOption"
+          />
+        </ChatMessage>
 
-      <div v-if="isPlaying" class="typing-indicator" aria-label="搭檔正在整理…">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-      </div>
+        <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+
+        <div v-if="isPlaying" class="typing-indicator" aria-label="搭檔正在整理…">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </template>
     </main>
 
     <footer class="bottom-panel">
@@ -136,32 +183,6 @@ onMounted(() => {
           送出
         </button>
       </div>
-
-      <div class="pills">
-        <button
-          v-for="pill in suggestedPills"
-          :key="pill"
-          class="pill"
-          :disabled="isPlaying"
-          @click="handlePillClick(pill)"
-        >
-          {{ pill }}
-        </button>
-      </div>
-
-      <div class="history-section">
-        <button class="history-toggle" @click="historyExpanded = !historyExpanded">
-          <span>對話紀錄 ({{ pastConversations.length }})</span>
-          <span class="history-chevron" :class="{ open: historyExpanded }">▴</span>
-        </button>
-        <Transition name="expand">
-          <PastConversations
-            v-if="historyExpanded"
-            :conversations="pastConversations"
-            @resume="handleResumeHistory"
-          />
-        </Transition>
-      </div>
     </footer>
   </div>
 </template>
@@ -170,83 +191,116 @@ onMounted(() => {
 .agent-page {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 60px);
+  overflow: hidden;
+  flex: 1;
 }
 
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  padding: var(--space-3) var(--space-4);
+/* ─── Header ─── */
+.agent-header {
+  padding: var(--space-6) var(--space-4) var(--space-3);
   background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
-.header-left {
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.header-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.header-icon-btn:hover,
+.header-icon-btn.active {
+  background: var(--neutral-subtle);
+  color: var(--action-primary);
+}
+
+.header-action-btn {
+  font-size: var(--text-caption);
+  color: var(--muted);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.header-action-btn:hover:not(:disabled) {
+  border-color: var(--action-primary);
+  color: var(--action-primary);
+}
+
+.history-dropdown {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+/* ─── Empty State ─── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: var(--space-6);
+  padding: var(--space-8);
+}
+
+.empty-greeting {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  color: var(--muted);
+}
+
+.empty-pills {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 320px;
+}
+
+/* ─── Message Area ─── */
+.message-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
 }
 
-.title {
-  margin: 0;
-  font-size: var(--text-large);
-  font-weight: 700;
-}
-
-.subtitle {
-  margin: 0;
-  font-size: var(--text-small);
-  color: var(--muted);
-}
-
-.new-conv-btn {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-small);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-control);
-  transition: background 0.15s;
-}
-
-.new-conv-btn:hover:not(:disabled) {
-  background: var(--primary-subtle);
-}
-
-.message-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-4);
-}
-
-.empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 120px;
-  color: var(--muted);
-  font-size: var(--text-caption);
-}
-
 .msg-text {
   margin: 0;
-  line-height: 1.7;
+  line-height: var(--leading-relaxed);
 }
 
 .error-message {
   margin: var(--space-3) 0;
   padding: var(--space-3);
-  background: var(--danger-subtle);
-  color: var(--danger);
-  border-radius: var(--radius-card);
+  background: var(--negative-subtle);
+  color: var(--negative);
+  border-radius: var(--radius-md);
   font-size: var(--text-caption);
 }
 
 .typing-indicator {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
   padding-left: calc(32px + var(--space-3));
 }
@@ -278,13 +332,12 @@ onMounted(() => {
   }
 }
 
+/* ─── Footer ─── */
 .bottom-panel {
   background: var(--surface);
   border-top: 1px solid var(--line);
   padding: var(--space-3) var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
 }
 
 .input-area {
@@ -301,92 +354,66 @@ onMounted(() => {
   font-size: var(--text-caption);
   color: var(--ink);
   transition:
-    border-color 0.15s,
-    background 0.15s;
+    border-color var(--duration-fast),
+    background var(--duration-fast);
 }
 
 .chat-input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--focus);
   background: var(--surface);
 }
 
 .chat-input::placeholder {
-  color: var(--muted);
+  color: var(--subtle);
 }
 
 .send-btn {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-pill);
-  background: var(--action-primary);
+  background: var(--gradient-primary);
   color: var(--on-ink);
   font-size: var(--text-caption);
-  font-weight: 500;
-  transition: background 0.15s;
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--shadow-button);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .send-btn:hover:not(:disabled) {
-  background: var(--action-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
 }
 
-.pills {
-  display: flex;
-  gap: var(--space-2);
-  overflow-x: auto;
-  padding-bottom: var(--space-1);
-}
-
+/* ─── Pills (shared between empty state and inline) ─── */
 .pill {
-  white-space: nowrap;
-  padding: var(--space-2) var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-small);
+  border-radius: var(--radius-md);
+  font-size: var(--text-caption);
   color: var(--muted);
-  transition: all 0.15s;
-  flex-shrink: 0;
+  text-align: left;
+  transition:
+    border-color var(--duration-fast),
+    color var(--duration-fast),
+    background var(--duration-fast);
 }
 
 .pill:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--primary-subtle);
+  border-color: var(--action-primary);
+  color: var(--action-primary);
+  background: var(--brand-light);
 }
 
-.history-section {
-  border-top: 1px solid var(--line);
-  padding-top: var(--space-3);
-}
-
-.history-toggle {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding: var(--space-2) 0;
-  font-size: var(--text-caption);
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.history-toggle:hover {
-  color: var(--ink);
-}
-
-.history-chevron {
-  transition: transform 0.2s;
-}
-
-.history-chevron.open {
-  transform: rotate(180deg);
-}
-
+/* ─── Transitions ─── */
 .expand-enter-active,
 .expand-leave-active {
   transition:
-    opacity 0.25s,
-    max-height 0.3s ease;
-  max-height: 500px;
+    opacity var(--duration-normal),
+    max-height var(--duration-normal) var(--ease-out);
+  max-height: 400px;
   overflow: hidden;
 }
 

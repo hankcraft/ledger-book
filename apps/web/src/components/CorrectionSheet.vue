@@ -110,7 +110,7 @@ function handleClose(): void {
   width: 100%;
   padding: var(--space-3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-md);
   font-size: var(--text-caption);
   resize: vertical;
   line-height: 1.5;
@@ -126,7 +126,7 @@ function handleClose(): void {
 .done-btn {
   width: 100%;
   padding: var(--space-3);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-md);
   font-weight: 600;
   font-size: var(--text-caption);
 }

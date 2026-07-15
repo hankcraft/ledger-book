@@ -23,8 +23,16 @@ defineProps<{ holding: Holding }>();
 .hc {
   padding: var(--space-3) var(--space-4);
   background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  box-shadow: var(--shadow-md);
+  transition:
+    transform var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out);
+}
+.hc:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 .top {
   display: flex;
@@ -46,7 +54,7 @@ defineProps<{ holding: Holding }>();
   color: var(--positive);
 }
 .neg {
-  background: #fef2f2;
+  background: var(--negative-subtle);
   color: var(--negative);
 }
 .bar-row {

@@ -10,33 +10,38 @@ defineProps<{ item: AttentionItem }>();
 </template>
 <style scoped>
 .attention-item {
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
   border-left: 3px solid var(--line);
 }
+
 .attention-item.severity-warning {
-  border-left-color: var(--brand-surface);
-  background: #fffcf5;
+  border-left-color: var(--brand-accent);
+  background: var(--warning-subtle);
 }
+
 .attention-item.severity-danger {
-  border-left-color: var(--danger);
-  background: var(--danger-subtle);
+  border-left-color: var(--negative);
+  background: var(--negative-subtle);
 }
+
 .attention-item.severity-info {
-  border-left-color: var(--accent);
-  background: var(--primary-subtle);
+  border-left-color: var(--action-primary);
+  background: var(--brand-light);
 }
+
 .label {
   margin: 0 0 var(--space-1);
-  font-size: var(--text-body);
-  font-weight: 600;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
 }
+
 .detail {
   margin: 0;
   font-size: var(--text-caption);
   color: var(--muted);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 </style>

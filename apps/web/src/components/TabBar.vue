@@ -7,7 +7,7 @@ const route = useRoute();
 const tabs = [
   { path: "/", label: "首頁", icon: Home },
   { path: "/performance", label: "績效", icon: TrendingUp },
-  { path: "/agent", label: "對話", icon: MessageCircle },
+  { path: "/agent", label: "聊聊", icon: MessageCircle },
   { path: "/my-data", label: "我的資料", icon: User },
 ] as const;
 </script>
@@ -31,6 +31,7 @@ const tabs = [
 .tab-bar {
   position: sticky;
   bottom: 0;
+  margin-top: auto;
   display: flex;
   background: var(--surface);
   border-top: 1px solid var(--line);

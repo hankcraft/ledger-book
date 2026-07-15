@@ -24,7 +24,6 @@ const router = createRouter({
       component: MyDataPage,
       meta: { requiresOnboarding: true },
     },
-    { path: "/portrait", redirect: "/my-data" },
   ],
 });
 

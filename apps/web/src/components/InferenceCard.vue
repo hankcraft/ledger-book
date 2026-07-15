@@ -49,10 +49,12 @@ function handleDeny(id: string) {
 .ic {
   padding: var(--space-4);
   background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  box-shadow: var(--shadow-md);
   transition:
-    transform 0.4s,
+    transform var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
     opacity 0.4s;
 }
 .ic.out {
@@ -82,15 +84,15 @@ function handleDeny(id: string) {
 }
 .unconfirmed {
   background: var(--warning-subtle);
-  color: #b45309;
+  color: var(--warning);
 }
 .hi {
-  background: #fef2f2;
+  background: var(--negative-subtle);
   color: var(--danger);
 }
 .mid {
   background: var(--warning-subtle);
-  color: #92400e;
+  color: var(--warning);
 }
 .lo {
   background: var(--neutral-subtle);
@@ -112,18 +114,19 @@ function handleDeny(id: string) {
   background: var(--success-subtle);
   color: var(--positive);
   padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-md);
   font-weight: 500;
   font-size: var(--text-caption);
 }
 .confirm-btn:hover {
-  background: #d1f0e0;
+  background: var(--positive-subtle);
+  filter: brightness(0.95);
 }
 .deny-btn {
-  background: #fef2f2;
+  background: var(--negative-subtle);
   color: var(--danger);
   padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-md);
   font-weight: 500;
   font-size: var(--text-caption);
 }
@@ -137,7 +140,7 @@ function handleDeny(id: string) {
   width: 100%;
   padding: var(--space-3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-md);
   font-size: var(--text-caption);
   resize: vertical;
   line-height: 1.5;
@@ -151,7 +154,7 @@ function handleDeny(id: string) {
   background: var(--action-primary);
   color: var(--on-ink);
   padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-md);
   font-size: var(--text-caption);
   font-weight: 500;
 }

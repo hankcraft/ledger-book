@@ -131,6 +131,7 @@ export interface PerformanceMetricsSummary {
 export interface PerformanceTimeline {
   points: PerformanceTimelinePoint[];
   metrics: PerformanceMetricsSummary;
+  eventDates: string[];
 }
 
 export interface TimePointEvent {

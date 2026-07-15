@@ -25,11 +25,13 @@ onUnmounted(() => {
 
 <template>
   <div class="app-shell">
-    <router-view v-slot="{ Component }">
-      <Transition name="page" mode="out-in">
-        <component :is="Component" />
-      </Transition>
-    </router-view>
+    <main class="app-content">
+      <router-view v-slot="{ Component }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </router-view>
+    </main>
 
     <Transition name="toast">
       <div v-if="state.toast" class="global-toast">{{ state.toast }}</div>
@@ -51,6 +53,14 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   position: relative;
+  background: var(--surface);
+}
+
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .global-toast {
@@ -65,7 +75,7 @@ onUnmounted(() => {
   font-size: var(--text-caption);
   font-weight: 500;
   z-index: 200;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-overlay);
 }
 
 .toast-enter-active,

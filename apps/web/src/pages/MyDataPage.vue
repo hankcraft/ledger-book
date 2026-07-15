@@ -2,8 +2,9 @@
 import { ref } from "vue";
 import { Briefcase, BookmarkCheck, BookOpen } from "lucide-vue-next";
 import { useAppStore } from "../composables/useAppStore";
-import HoldingCard from "../components/HoldingCard.vue";
 import CorrectionSheet from "../components/CorrectionSheet.vue";
+import HoldingCard from "../components/HoldingCard.vue";
+import PageHeader from "../components/PageHeader.vue";
 
 const {
   state,
@@ -44,18 +45,19 @@ function closeCorrection(): void {
 
 <template>
   <main class="my-data">
-    <header class="page-header">
-      <h1>我的資料</h1>
-      <button
-        class="correction-btn"
-        @click="
-          correctionResponse = null;
-          correctionOpen = true;
-        "
-      >
-        修改資料
-      </button>
-    </header>
+    <PageHeader title="我的資料">
+      <template #action>
+        <button
+          class="header-action-btn"
+          @click="
+            correctionResponse = null;
+            correctionOpen = true;
+          "
+        >
+          修改資料
+        </button>
+      </template>
+    </PageHeader>
 
     <!-- Holdings -->
     <section class="section">
@@ -141,38 +143,33 @@ function closeCorrection(): void {
 
 <style scoped>
 .my-data {
-  padding: var(--space-4);
+  padding: var(--space-6) var(--space-4);
   padding-bottom: calc(var(--space-8) + 60px);
-}
-
-.page-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-6);
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.page-header h1 {
-  margin: 0;
-  font-size: var(--text-heading);
-  font-weight: 700;
-}
-
-.correction-btn {
-  background: var(--primary-subtle);
-  color: var(--accent);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-control);
+.header-action-btn {
   font-size: var(--text-caption);
-  font-weight: 500;
+  color: var(--muted);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--duration-fast),
+    color var(--duration-fast);
 }
 
-.correction-btn:hover {
-  background: #d1eafa;
+.header-action-btn:hover:not(:disabled) {
+  border-color: var(--action-primary);
+  color: var(--action-primary);
 }
 
 .section {
-  margin-bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .section-toggle {
@@ -277,7 +274,7 @@ function closeCorrection(): void {
 .p-paused {
   font-size: var(--text-small);
   background: var(--warning-subtle);
-  color: #b45309;
+  color: var(--warning);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-control);
 }
