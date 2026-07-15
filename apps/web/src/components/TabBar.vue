@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { useRoute } from "vue-router";
+import { Home, TrendingUp, MessageCircle, User } from "lucide-vue-next";
 
 const route = useRoute();
 
 const tabs = [
-  { path: "/", label: "首頁", icon: "🏠" },
-  { path: "/agent", label: "反思", icon: "🪞" },
-  { path: "/portrait", label: "自畫像", icon: "👤" },
+  { path: "/", label: "首頁", icon: Home },
+  { path: "/performance", label: "績效", icon: TrendingUp },
+  { path: "/agent", label: "對話", icon: MessageCircle },
+  { path: "/my-data", label: "我的資料", icon: User },
 ] as const;
 </script>
 
@@ -19,7 +21,7 @@ const tabs = [
       class="tab-item"
       :class="{ 'tab-item--active': route.path === tab.path }"
     >
-      <span class="tab-icon">{{ tab.icon }}</span>
+      <component :is="tab.icon" class="tab-icon" :size="22" :stroke-width="1.75" />
       <span class="tab-label">{{ tab.label }}</span>
     </router-link>
   </nav>
@@ -54,7 +56,7 @@ const tabs = [
 }
 
 .tab-icon {
-  font-size: 1.25rem;
+  flex-shrink: 0;
 }
 
 .tab-label {

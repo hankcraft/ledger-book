@@ -84,7 +84,7 @@ onMounted(() => {
   <div class="agent-page">
     <header class="header">
       <div class="header-left">
-        <h1 class="title">持倉鏡</h1>
+        <h1 class="title">投資搭檔</h1>
         <p class="subtitle">對話式反思</p>
       </div>
       <button class="new-conv-btn" :disabled="isPlaying" @click="handleNewConversation">
