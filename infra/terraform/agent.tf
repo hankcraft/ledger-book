@@ -114,7 +114,7 @@ resource "aws_bedrockagentcore_agent_runtime" "stock_agent" {
 # --- AgentCore Runtime Endpoint -----------------------------------------------
 
 resource "aws_bedrockagentcore_agent_runtime_endpoint" "stock_agent" {
-  name             = "${var.agent_runtime_name}-ep"
+  name             = "${var.agent_runtime_name}_ep"
   agent_runtime_id = aws_bedrockagentcore_agent_runtime.stock_agent.agent_runtime_id
   description      = "Public endpoint for stock insights agent"
 

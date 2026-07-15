@@ -14,14 +14,14 @@ COPY package.json bun.lock ./
 COPY packages/contracts/ packages/contracts/
 COPY apps/api/ apps/api/
 
-# Install all dependencies (including prisma devDep for generate)
-RUN bun install --frozen-lockfile
+# Install dependencies (--ignore-scripts avoids lefthook needing git)
+RUN bun install --ignore-scripts
 
 # Generate Prisma client
 WORKDIR /app/apps/api
 RUN bunx prisma generate
 
-# Build the API bundle
+# Build the API bundle (externalize prisma for runtime resolution)
 RUN bun build ./src/index.ts --outdir ./dist --target bun --external @prisma/client --external .prisma
 
 # --- Runtime Stage ------------------------------------------------------------
@@ -29,21 +29,16 @@ FROM oven/bun:1-slim
 
 WORKDIR /app
 
-# Copy Prisma schema and generated client
-COPY --from=builder /app/apps/api/prisma ./prisma
-COPY --from=builder /app/apps/api/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/apps/api/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Preserve the bun workspace structure so prisma resolves engines via relative paths
+# apps/api/node_modules/.bin/prisma → ../../node_modules/.bun/@prisma+engines@...
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
-# Copy built API bundle
-COPY --from=builder /app/apps/api/dist ./dist
-
-# Copy prisma CLI for migrations (optional: run migrate deploy on start)
-COPY --from=builder /app/apps/api/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/apps/api/node_modules/.bin/prisma ./node_modules/.bin/prisma
+WORKDIR /app/apps/api
 
 EXPOSE 3000
 
-# Run migrations then start the server
-CMD ["sh", "-c", "bunx prisma migrate deploy --schema ./prisma/schema.prisma && bun run dist/index.js"]
+# Run db push using the workspace's prisma (6.9.0), then start server
+CMD ["sh", "-c", "./node_modules/.bin/prisma db push --schema ./prisma/schema.prisma --accept-data-loss --skip-generate && bun run dist/index.js"]

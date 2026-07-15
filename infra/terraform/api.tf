@@ -1,5 +1,8 @@
 # =============================================================================
-# API Backend — App Runner + RDS PostgreSQL
+# API Backend — ECS Fargate + ALB + RDS PostgreSQL
+# =============================================================================
+# Note: App Runner is blocked by SCP in this hackathon account.
+# Using ECS Fargate with ALB as the alternative.
 # =============================================================================
 
 # --- ECR Repository -----------------------------------------------------------
@@ -16,7 +19,7 @@ resource "aws_ecr_repository" "api" {
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-api" })
 }
 
-# --- VPC for RDS + App Runner -------------------------------------------------
+# --- VPC + Networking ---------------------------------------------------------
 
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -24,6 +27,22 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-vpc" })
+}
+
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-igw" })
+}
+
+resource "aws_subnet" "public" {
+  count                   = 2
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 10)
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-public-${count.index}" })
 }
 
 resource "aws_subnet" "private" {
@@ -39,23 +58,65 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-resource "aws_security_group" "rds" {
-  name_prefix = "${local.name_prefix}-rds-"
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-public-rt" })
+}
+
+resource "aws_route_table_association" "public" {
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# NAT Gateway for Fargate tasks in private subnets to pull images
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = merge(local.common_tags, { Name = "${local.name_prefix}-nat-eip" })
+}
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-nat" })
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-private-rt" })
+}
+
+resource "aws_route_table_association" "private" {
+  count          = 2
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
+
+# --- Security Groups ----------------------------------------------------------
+
+resource "aws_security_group" "alb" {
+  name_prefix = "${local.name_prefix}-alb-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.apprunner.id]
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds-sg" })
-}
-
-resource "aws_security_group" "apprunner" {
-  name_prefix = "${local.name_prefix}-apprunner-"
-  vpc_id      = aws_vpc.main.id
 
   egress {
     from_port   = 0
@@ -64,7 +125,42 @@ resource "aws_security_group" "apprunner" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-apprunner-sg" })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-alb-sg" })
+}
+
+resource "aws_security_group" "ecs" {
+  name_prefix = "${local.name_prefix}-ecs-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = var.api_port
+    to_port         = var.api_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-ecs-sg" })
+}
+
+resource "aws_security_group" "rds" {
+  name_prefix = "${local.name_prefix}-rds-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+  }
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds-sg" })
 }
 
 # --- RDS PostgreSQL -----------------------------------------------------------
@@ -113,101 +209,137 @@ resource "aws_rds_cluster_instance" "main" {
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-db-instance" })
 }
 
-# --- IAM Role for App Runner ECR Access ---------------------------------------
+# --- ALB ----------------------------------------------------------------------
 
-resource "aws_iam_role" "apprunner_ecr_access" {
-  name = "${local.name_prefix}-apprunner-ecr"
+resource "aws_lb" "api" {
+  name               = "${local.name_prefix}-api"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-api-alb" })
+}
+
+resource "aws_lb_target_group" "api" {
+  name        = "${local.name_prefix}-api"
+  port        = var.api_port
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    path                = "/api/health"
+    interval            = 15
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-api-tg" })
+}
+
+resource "aws_lb_listener" "api" {
+  load_balancer_arn = aws_lb.api.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api.arn
+  }
+}
+
+# --- ECS Fargate --------------------------------------------------------------
+
+resource "aws_ecs_cluster" "main" {
+  name = "${local.name_prefix}-cluster"
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-cluster" })
+}
+
+resource "aws_iam_role" "ecs_task_execution" {
+  name = "${local.name_prefix}-ecs-exec"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Action    = "sts:AssumeRole"
       Effect    = "Allow"
-      Principal = { Service = "build.apprunner.amazonaws.com" }
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
     }]
   })
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-apprunner-ecr" })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-ecs-exec" })
 }
 
-resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
-  role       = aws_iam_role.apprunner_ecr_access.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
+  role       = aws_iam_role.ecs_task_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# --- App Runner VPC Connector -------------------------------------------------
+resource "aws_cloudwatch_log_group" "api" {
+  name              = "/ecs/${local.name_prefix}-api"
+  retention_in_days = 7
 
-resource "aws_apprunner_vpc_connector" "main" {
-  vpc_connector_name = "${local.name_prefix}-vpc"
-  subnets            = aws_subnet.private[*].id
-  security_groups    = [aws_security_group.apprunner.id]
-
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-vpc-connector" })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-api-logs" })
 }
 
-# --- App Runner Auto Scaling --------------------------------------------------
+resource "aws_ecs_task_definition" "api" {
+  family                   = "${local.name_prefix}-api"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.api_cpu
+  memory                   = var.api_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
 
-resource "aws_apprunner_auto_scaling_configuration_version" "api" {
-  auto_scaling_configuration_name = "${local.name_prefix}-api"
-
-  min_size        = 1
-  max_size        = 2
-  max_concurrency = 100
-
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-api-autoscaling" })
-}
-
-# --- App Runner Service -------------------------------------------------------
-
-resource "aws_apprunner_service" "api" {
-  service_name = "${local.name_prefix}-api"
-
-  source_configuration {
-    authentication_configuration {
-      access_role_arn = aws_iam_role.apprunner_ecr_access.arn
-    }
-
-    image_repository {
-      image_identifier      = "${aws_ecr_repository.api.repository_url}:${var.api_image_tag}"
-      image_repository_type = "ECR"
-
-      image_configuration {
-        port = tostring(var.api_port)
-
-        runtime_environment_variables = {
-          PORT           = tostring(var.api_port)
-          NODE_ENV       = "production"
-          DATABASE_URL   = "postgresql://${aws_rds_cluster.main.master_username}:${random_password.db.result}@${aws_rds_cluster.main.endpoint}:5432/${aws_rds_cluster.main.database_name}?schema=public"
-          AGENT_ENDPOINT = "https://${aws_bedrockagentcore_agent_runtime_endpoint.stock_agent.agent_runtime_endpoint_arn}"
+  container_definitions = jsonencode([
+    {
+      name  = "api"
+      image = "${aws_ecr_repository.api.repository_url}:${var.api_image_tag}"
+      portMappings = [{
+        containerPort = var.api_port
+        protocol      = "tcp"
+      }]
+      environment = [
+        { name = "PORT", value = tostring(var.api_port) },
+        { name = "NODE_ENV", value = "production" },
+        { name = "DATABASE_URL", value = "postgresql://${aws_rds_cluster.main.master_username}:${random_password.db.result}@${aws_rds_cluster.main.endpoint}:5432/${aws_rds_cluster.main.database_name}?schema=public" },
+        { name = "AGENT_ENDPOINT", value = "https://${aws_bedrockagentcore_agent_runtime_endpoint.stock_agent.agent_runtime_endpoint_arn}" },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.api.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "api"
         }
       }
     }
+  ])
 
-    auto_deployments_enabled = true
-  }
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-api-task" })
+}
 
-  instance_configuration {
-    cpu    = var.api_cpu
-    memory = var.api_memory
-  }
+resource "aws_ecs_service" "api" {
+  name            = "${local.name_prefix}-api"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.api.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
 
   network_configuration {
-    egress_configuration {
-      egress_type       = "VPC"
-      vpc_connector_arn = aws_apprunner_vpc_connector.main.arn
-    }
+    subnets         = aws_subnet.private[*].id
+    security_groups = [aws_security_group.ecs.id]
   }
 
-  health_check_configuration {
-    protocol            = "HTTP"
-    path                = "/api/health"
-    interval            = 10
-    timeout             = 5
-    healthy_threshold   = 1
-    unhealthy_threshold = 5
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = "api"
+    container_port   = var.api_port
   }
 
-  auto_scaling_configuration_arn = aws_apprunner_auto_scaling_configuration_version.api.arn
+  depends_on = [aws_lb_listener.api]
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-api" })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-api-service" })
 }

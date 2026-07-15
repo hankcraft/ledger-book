@@ -59,12 +59,12 @@ resource "aws_opensearchserverless_access_policy" "stock_data" {
       Rules = [
         {
           Resource     = ["index/${local.name_prefix}-stock-data/*"]
-          Permission   = ["aoss:ReadDocument", "aoss:DescribeIndex", "aoss:SearchIndex"]
+          Permission   = ["aoss:ReadDocument", "aoss:DescribeIndex", "aoss:WriteDocument", "aoss:CreateIndex"]
           ResourceType = "index"
         },
         {
           Resource     = ["collection/${local.name_prefix}-stock-data"]
-          Permission   = ["aoss:DescribeCollectionItems", "aoss:CreateCollectionItems"]
+          Permission   = ["aoss:CreateCollectionItems", "aoss:DescribeCollectionItems"]
           ResourceType = "collection"
         }
       ]

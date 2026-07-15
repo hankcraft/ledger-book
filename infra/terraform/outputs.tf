@@ -4,8 +4,8 @@ output "cloudfront_url" {
 }
 
 output "api_url" {
-  description = "App Runner service URL"
-  value       = aws_apprunner_service.api.service_url
+  description = "ALB DNS name for the API"
+  value       = aws_lb.api.dns_name
 }
 
 output "s3_bucket_name" {
