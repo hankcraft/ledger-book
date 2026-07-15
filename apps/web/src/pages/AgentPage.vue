@@ -191,7 +191,8 @@ onMounted(async () => {
 .agent-page {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - var(--tab-bar-height));
+  overflow: hidden;
+  flex: 1;
 }
 
 /* ─── Header ─── */
