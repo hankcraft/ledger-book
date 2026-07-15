@@ -23,6 +23,7 @@ export interface V1Holding {
   weight: number;
   cost: number;
   plPercent: number;
+  purchaseDate?: string;
 }
 
 export interface V1Principle {

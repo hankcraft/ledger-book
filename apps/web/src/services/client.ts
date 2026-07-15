@@ -232,6 +232,15 @@ class RealOnboardingService implements IOnboardingService {
     );
     return mapContext(res.context);
   }
+
+  async applyTemplate(templateId: string): Promise<UserContext> {
+    const res = await this.fetch.request<{ context: Record<string, unknown> }>(
+      "POST",
+      "/onboarding/apply-template",
+      { templateId },
+    );
+    return mapContext(res.context);
+  }
 }
 
 class RealContextService implements IContextService {
@@ -381,8 +390,33 @@ class RealAgentService implements IAgentService {
 
   async resumeConversation(
     conversationId: string,
-  ): Promise<{ conversationId: string; contextSummary: string }> {
-    return this.fetch.request("POST", `/conversations/${conversationId}/resume`);
+  ): Promise<{ conversationId: string; contextSummary: string; messages?: DisplayMessage[] }> {
+    const response = await this.fetch.request<{
+      conversationId: string;
+      contextSummary?: string;
+      messages?: Array<{
+        id: string;
+        role: string;
+        text?: string | null;
+        cardData?: unknown;
+        createdAt?: string;
+      }>;
+    }>("POST", `/conversations/${conversationId}/resume`);
+
+    // Map stored messages to DisplayMessage format
+    const messages: DisplayMessage[] = (response.messages ?? []).map((m) => ({
+      id: m.id,
+      role: m.role as "user" | "agent",
+      text: m.text ?? undefined,
+      card: m.cardData as DisplayMessage["card"],
+      timestamp: m.createdAt,
+    }));
+
+    return {
+      conversationId: response.conversationId,
+      contextSummary: response.contextSummary ?? "",
+      messages,
+    };
   }
 
   async getPastConversations(): Promise<ConversationSummary[]> {

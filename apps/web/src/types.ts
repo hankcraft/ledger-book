@@ -4,6 +4,7 @@ export interface Holding {
   weight: number;
   cost: number;
   plPercent: number;
+  purchaseDate?: string;
 }
 
 export interface Principle {
@@ -123,4 +124,5 @@ export interface DisplayMessage {
   role: MessageRole;
   text?: string;
   card?: CardData;
+  timestamp?: string;
 }

@@ -82,6 +82,30 @@ export function createOnboardingRoutes(contextService: ContextService, getUserId
           weightPercent: t.Optional(t.Number()),
         }),
       },
+    )
+    .post(
+      "/apply-template",
+      async ({ body, set }) => {
+        const userId = getUserId();
+        try {
+          const context = await contextService.applyTemplate(userId, body.templateId);
+          set.status = 201;
+          return { context };
+        } catch (err) {
+          set.status = 400;
+          return {
+            error: {
+              code: "INVALID_TEMPLATE",
+              message: err instanceof Error ? err.message : "Invalid template",
+            },
+          };
+        }
+      },
+      {
+        body: t.Object({
+          templateId: t.String(),
+        }),
+      },
     );
 }
 

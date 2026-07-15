@@ -16,6 +16,7 @@ defineProps<{ holding: Holding }>();
     </div>
     <div class="bot">
       <span class="cost">成本 ${{ holding.cost.toLocaleString() }}</span>
+      <span v-if="holding.purchaseDate" class="date">{{ holding.purchaseDate }}</span>
     </div>
   </div>
 </template>
@@ -87,6 +88,10 @@ defineProps<{ holding: Holding }>();
   justify-content: space-between;
 }
 .cost {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+.date {
   font-size: var(--text-small);
   color: var(--muted);
 }

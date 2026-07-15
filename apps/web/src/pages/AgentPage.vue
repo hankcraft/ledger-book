@@ -6,6 +6,7 @@ import AgentInsightCard from "../components/AgentInsightCard.vue";
 import ChatMessage from "../components/ChatMessage.vue";
 import ConfirmationQuestion from "../components/ConfirmationQuestion.vue";
 import EvidenceCard from "../components/EvidenceCard.vue";
+import MarkdownText from "../components/MarkdownText.vue";
 import MemoryRecall from "../components/MemoryRecall.vue";
 import PageHeader from "../components/PageHeader.vue";
 import PastConversations from "../components/PastConversations.vue";
@@ -21,6 +22,7 @@ const {
   pastConversations,
   beginNewConversation,
   startNewConversation,
+  sendMessage,
   resumeConversation,
   loadPastConversations,
   selectOption,
@@ -38,13 +40,13 @@ async function handleSend(): Promise<void> {
   if (!text || isPlaying.value) return;
   userInput.value = "";
   selectedOption.value = null;
-  await startNewConversation(text);
+  await sendMessage(text);
 }
 
 async function handlePillClick(pill: string): Promise<void> {
   if (isPlaying.value) return;
   selectedOption.value = null;
-  await startNewConversation(pill);
+  await sendMessage(pill);
 }
 
 function handleNewConversation(): void {
@@ -143,8 +145,18 @@ onMounted(async () => {
 
       <!-- Conversation messages -->
       <template v-else>
-        <ChatMessage v-for="message in messages" :key="message.id" :role="message.role">
-          <p v-if="message.text" class="msg-text">{{ message.text }}</p>
+        <ChatMessage
+          v-for="message in messages"
+          :key="message.id"
+          :role="message.role"
+          :timestamp="message.timestamp"
+        >
+          <p v-if="message.text && message.role === 'user'" class="msg-text">{{ message.text }}</p>
+          <MarkdownText
+            v-else-if="message.text"
+            :content="message.text"
+            :animate="!message.id.startsWith('history-')"
+          />
           <AgentInsightCard v-if="message.card?.type === 'insight'" :data="message.card" />
           <MemoryRecall v-if="message.card?.type === 'memory-recall'" :data="message.card" />
           <EvidenceCard v-if="message.card?.type === 'evidence'" :data="message.card" />

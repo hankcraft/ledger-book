@@ -9,10 +9,10 @@ import type {
 } from "../types";
 
 export const seedHoldings: Holding[] = [
-  { id: "h1", name: "台積電", weight: 40, cost: 980, plPercent: 12 },
-  { id: "h2", name: "聯發科", weight: 28, cost: 1280, plPercent: -5 },
-  { id: "h3", name: "長榮", weight: 20, cost: 168, plPercent: 8 },
-  { id: "h4", name: "聯電", weight: 12, cost: 52, plPercent: 3 },
+  { id: "h1", name: "台積電", weight: 40, cost: 980, plPercent: 12, purchaseDate: "2026-04-01" },
+  { id: "h2", name: "聯發科", weight: 28, cost: 1280, plPercent: -5, purchaseDate: "2026-05-15" },
+  { id: "h3", name: "長榮", weight: 20, cost: 168, plPercent: 8, purchaseDate: "2026-03-20" },
+  { id: "h4", name: "聯電", weight: 12, cost: 52, plPercent: 3, purchaseDate: "2026-06-10" },
 ];
 
 export const seedPrinciples: Principle[] = [

@@ -123,6 +123,18 @@ export function useAppStore() {
     }
   }
 
+  async function applyTemplate(templateId: string): Promise<void> {
+    state.loading = true;
+    try {
+      applyContext(await api.onboarding.applyTemplate(templateId));
+      state.onboardingComplete = true;
+      writeOnboardingCompletion();
+      showToast("已套用範本，歡迎開始使用！");
+    } finally {
+      state.loading = false;
+    }
+  }
+
   async function confirmInference(id: string): Promise<void> {
     const inference = state.inferences.find((item) => item.id === id);
     if (!inference) return;
@@ -209,6 +221,24 @@ export function useAppStore() {
     }
   }
 
+  function logout(): void {
+    clearOnboardingCompletion();
+    // Also clear mock API state for a fresh onboarding experience
+    try {
+      window.sessionStorage.removeItem("ledger-book:mock-api-state");
+    } catch {
+      // Ignore storage access errors
+    }
+    state.onboardingComplete = false;
+    state.holdings = [];
+    state.principles = [];
+    state.memories = [];
+    state.inferences = [];
+    state.behaviors = [];
+    state.hydrated = false;
+    hydrationPromise = null;
+  }
+
   return {
     state,
     activeMemories,
@@ -216,6 +246,8 @@ export function useAppStore() {
     hydrate,
     completeOnboarding,
     skipOnboarding,
+    applyTemplate,
+    logout,
     confirmInference,
     denyInference,
     archiveMemory,

@@ -39,6 +39,8 @@ export interface IOnboardingService {
   getFinalInsight(input: OnboardingInput): Promise<string>;
   /** Complete onboarding — server creates initial context */
   completeOnboarding(input: OnboardingInput): Promise<UserContext>;
+  /** Apply a pre-built ledger template to skip manual input */
+  applyTemplate(templateId: string): Promise<UserContext>;
 }
 
 // ─── Context (Portrait) ───────────────────────────────────────
@@ -107,7 +109,7 @@ export interface IAgentService {
   /** Resume a past conversation (loads context, starts new thread) */
   resumeConversation(
     conversationId: string,
-  ): Promise<{ conversationId: string; contextSummary: string }>;
+  ): Promise<{ conversationId: string; contextSummary: string; messages?: DisplayMessage[] }>;
   /** Get past conversation summaries */
   getPastConversations(): Promise<ConversationSummary[]>;
   /** User selected a confirmation option */
@@ -132,12 +134,24 @@ export interface PerformanceTimeline {
   points: PerformanceTimelinePoint[];
   metrics: PerformanceMetricsSummary;
   eventDates: string[];
+  missingDates?: boolean;
+}
+
+export interface TradeDetail {
+  name: string;
+  symbol: string;
+  type: "buy" | "sell";
+  quantity: number;
+  unitPrice: number;
+  amount: number;
 }
 
 export interface TimePointEvent {
   date: string;
   type: "buy" | "sell" | "dividend" | "market";
   summary: string;
+  sentiment?: "bullish" | "bearish" | "neutral";
+  trades?: TradeDetail[];
 }
 
 export interface IPerformanceService {

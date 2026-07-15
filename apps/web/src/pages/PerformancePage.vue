@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef } from "vue";
+import { Plus } from "lucide-vue-next";
 
 import PageHeader from "../components/PageHeader.vue";
 import PerformanceChart from "../components/PerformanceChart.vue";
@@ -52,6 +53,10 @@ async function handleSelectPoint(date: string): Promise<void> {
   }
 }
 
+function openQuickEntry(): void {
+  window.dispatchEvent(new CustomEvent("open-quick-entry"));
+}
+
 function formatPercent(value: number): string {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(1)}%`;
@@ -77,6 +82,7 @@ const eventTypeClass: Record<string, string> = {
 };
 
 const hasEvents = computed(() => events.value.length > 0);
+const hasMissingDates = computed(() => timeline.value?.missingDates ?? false);
 
 onMounted(() => {
   void loadTimeline();
@@ -85,7 +91,23 @@ onMounted(() => {
 
 <template>
   <main class="performance" :aria-busy="loading">
-    <PageHeader title="績效" />
+    <PageHeader title="績效">
+      <template #action>
+        <button class="add-trade-btn" @click="openQuickEntry">
+          <Plus :size="16" :stroke-width="2" />
+          新增交易
+        </button>
+      </template>
+    </PageHeader>
+
+    <!-- Missing-date nudge -->
+    <div v-if="hasMissingDates" class="nudge-banner" role="status">
+      <span class="nudge-icon">📅</span>
+      <div class="nudge-content">
+        <p class="nudge-text">有庫存還沒填交易日期</p>
+        <p class="nudge-detail">補上日期後，績效圖會更準確，也能看到當天的交易情緒回顧。</p>
+      </div>
+    </div>
 
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
 
@@ -172,6 +194,61 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* ─── Add Trade Button ─── */
+.add-trade-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--action-primary);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--action-primary);
+  border-radius: var(--radius-md);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.add-trade-btn:hover {
+  background: var(--brand-light, var(--primary-subtle));
+}
+
+/* ─── Missing-date Nudge ─── */
+.nudge-banner {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--warning-subtle, #fff8e1);
+  border: 1px solid var(--warning, #f59e0b);
+  border-radius: var(--radius-card);
+}
+
+.nudge-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.nudge-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.nudge-text {
+  margin: 0;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.nudge-detail {
+  margin: 0;
+  font-size: var(--text-small, 0.75rem);
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .metrics-strip {

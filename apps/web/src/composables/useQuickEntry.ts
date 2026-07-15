@@ -1,6 +1,5 @@
 import { computed, reactive, ref } from "vue";
 
-import { useApi } from "../services";
 import { useAppStore } from "./useAppStore";
 
 export interface QuickEntryFormState {
@@ -14,7 +13,6 @@ export interface QuickEntryFormState {
 const drawerOpen = ref(false);
 
 export function useQuickEntry() {
-  const api = useApi();
   const { showToast } = useAppStore();
 
   const form = reactive<QuickEntryFormState>({
@@ -60,12 +58,31 @@ export function useQuickEntry() {
     error.value = null;
 
     try {
-      await api.performance.getPerformanceTimeline(); // placeholder — real API would be createEntry
+      const qty = Number(form.quantity);
+      const price = Number(form.unitPrice);
+
+      const response = await fetch("/api/v1/performance/trades", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: form.securityId.trim(),
+          entryType: form.entryType,
+          quantity: qty,
+          unitPrice: price,
+          date: form.date,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error?.message ?? "建立失敗");
+      }
+
       resetForm();
       showToast("已新增 ✓");
       return true;
-    } catch {
-      error.value = "沒成功，等一下再試？";
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : "沒成功，等一下再試？";
       return false;
     } finally {
       submitting.value = false;

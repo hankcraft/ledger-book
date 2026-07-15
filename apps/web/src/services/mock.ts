@@ -29,6 +29,7 @@ import {
   conversationScript,
   getStockResponse,
 } from "../data/seed";
+import { ledgerTemplates } from "../data/ledger-templates";
 
 function delay(ms = 300): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -157,6 +158,17 @@ class MockOnboardingService implements IOnboardingService {
         ...clone(seedHoldings).filter((holding) => holding.name !== input.stockName),
       ],
     };
+    this.persist();
+
+    return clone(this.state.context);
+  }
+
+  async applyTemplate(templateId: string): Promise<UserContext> {
+    await delay(300);
+    const template = ledgerTemplates.find((t) => t.id === templateId);
+    if (!template) throw new Error(`Template ${templateId} not found`);
+
+    this.state.context = clone(template.context);
     this.persist();
 
     return clone(this.state.context);
@@ -328,7 +340,7 @@ class MockAgentService implements IAgentService {
 
   async resumeConversation(
     conversationId: string,
-  ): Promise<{ conversationId: string; contextSummary: string }> {
+  ): Promise<{ conversationId: string; contextSummary: string; messages?: DisplayMessage[] }> {
     await delay(300);
     const resumedConversationId = `conv-resume-${Date.now()}`;
     this.conversations.set(resumedConversationId, {
@@ -338,6 +350,7 @@ class MockAgentService implements IAgentService {
     return {
       conversationId: resumedConversationId,
       contextSummary: `延續上次對話 ${conversationId} 的脈絡…`,
+      messages: [],
     };
   }
 
