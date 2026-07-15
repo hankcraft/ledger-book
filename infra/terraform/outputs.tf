@@ -18,6 +18,11 @@ output "ecr_repo_url" {
   value       = aws_ecr_repository.api.repository_url
 }
 
+output "database_endpoint" {
+  description = "RDS Aurora PostgreSQL cluster endpoint"
+  value       = aws_rds_cluster.main.endpoint
+}
+
 # --- Agent Outputs ------------------------------------------------------------
 
 output "agent_runtime_arn" {
