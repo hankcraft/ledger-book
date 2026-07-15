@@ -9,9 +9,8 @@
 # --- Encryption Policy (required before collection creation) ------------------
 
 resource "aws_opensearchserverless_security_policy" "stock_data_encryption" {
-  provider = aws.agent
-  name     = "${local.name_prefix}-enc"
-  type     = "encryption"
+  name = "${local.name_prefix}-enc"
+  type = "encryption"
 
   policy = jsonencode({
     Rules = [
@@ -27,9 +26,8 @@ resource "aws_opensearchserverless_security_policy" "stock_data_encryption" {
 # --- Network Policy -----------------------------------------------------------
 
 resource "aws_opensearchserverless_security_policy" "stock_data_network" {
-  provider = aws.agent
-  name     = "${local.name_prefix}-net"
-  type     = "network"
+  name = "${local.name_prefix}-net"
+  type = "network"
 
   policy = jsonencode([
     {
@@ -52,22 +50,21 @@ resource "aws_opensearchserverless_security_policy" "stock_data_network" {
 # --- Data Access Policy -------------------------------------------------------
 
 resource "aws_opensearchserverless_access_policy" "stock_data" {
-  provider = aws.agent
-  name     = "${local.name_prefix}-data"
-  type     = "data"
+  name = "${local.name_prefix}-data"
+  type = "data"
 
   policy = jsonencode([
     {
       Description = "Allow AgentCore runtime and admin access"
       Rules = [
         {
-          Resource   = ["index/${local.name_prefix}-stock-data/*"]
-          Permission = ["aoss:ReadDocument", "aoss:DescribeIndex", "aoss:SearchIndex"]
+          Resource     = ["index/${local.name_prefix}-stock-data/*"]
+          Permission   = ["aoss:ReadDocument", "aoss:DescribeIndex", "aoss:SearchIndex"]
           ResourceType = "index"
         },
         {
-          Resource   = ["collection/${local.name_prefix}-stock-data"]
-          Permission = ["aoss:DescribeCollectionItems", "aoss:CreateCollectionItems"]
+          Resource     = ["collection/${local.name_prefix}-stock-data"]
+          Permission   = ["aoss:DescribeCollectionItems", "aoss:CreateCollectionItems"]
           ResourceType = "collection"
         }
       ]
@@ -82,9 +79,8 @@ resource "aws_opensearchserverless_access_policy" "stock_data" {
 # --- OpenSearch Serverless Collection -----------------------------------------
 
 resource "aws_opensearchserverless_collection" "stock_data" {
-  provider = aws.agent
-  name     = "${local.name_prefix}-stock-data"
-  type     = "SEARCH"
+  name = "${local.name_prefix}-stock-data"
+  type = "SEARCH"
 
   depends_on = [
     aws_opensearchserverless_security_policy.stock_data_encryption,

@@ -12,11 +12,11 @@ terraform {
     }
   }
 
-  # TODO: Uncomment after bootstrap (run bootstrap/ first to create the S3 bucket and DynamoDB table)
+  # TODO: Uncomment after bootstrap (create the S3 bucket and DynamoDB table first)
   # backend "s3" {
   #   bucket         = "ledger-book-demo-tfstate"
   #   key            = "terraform.tfstate"
-  #   region         = "ap-northeast-1"
+  #   region         = "us-east-1"
   #   dynamodb_table = "ledger-book-demo-tflock"
   #   encrypt        = true
   # }

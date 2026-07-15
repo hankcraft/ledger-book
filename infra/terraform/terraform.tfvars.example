@@ -1,11 +1,8 @@
-project_name  = "ledger-book"
-environment   = "demo"
-aws_region    = "ap-northeast-1"
-api_image_tag = "latest"
-api_port      = 3000
-api_cpu       = "1024"
-api_memory    = "2048"
-
-# Agent (AgentCore + OpenSearch) — deployed to us-east-1
-agent_region       = "us-east-1"
+project_name       = "ledger-book"
+environment        = "demo"
+aws_region         = "us-east-1"
+api_image_tag      = "latest"
+api_port           = 3000
+api_cpu            = "1024"
+api_memory         = "2048"
 agent_runtime_name = "cmoney_stock_node"

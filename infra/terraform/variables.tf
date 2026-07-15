@@ -11,9 +11,9 @@ variable "environment" {
 }
 
 variable "aws_region" {
-  description = "AWS region"
+  description = "AWS region for all resources"
   type        = string
-  default     = "ap-northeast-1"
+  default     = "us-east-1"
 }
 
 variable "api_image_tag" {
@@ -38,14 +38,6 @@ variable "api_memory" {
   description = "Memory in MB for the API container"
   type        = string
   default     = "2048"
-}
-
-# --- Agent (AgentCore) Variables ----------------------------------------------
-
-variable "agent_region" {
-  description = "AWS region for AgentCore and OpenSearch (us-east-1 for service availability)"
-  type        = string
-  default     = "us-east-1"
 }
 
 variable "agent_runtime_name" {
