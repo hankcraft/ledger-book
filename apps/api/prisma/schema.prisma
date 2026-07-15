@@ -1,0 +1,304 @@
+// Ledger Book – Prisma Schema
+// All tables use UUID PKs, snake_case DB names, PascalCase models.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Core Domain
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id          String   @id @default(uuid())
+  displayName String   @map("display_name")
+  locale      String   @default("zh-TW")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  portfolios      Portfolio[]
+  v1Holdings      V1Holding[]
+  v1Principles    V1Principle[]
+  v1Memories      V1Memory[]
+  v1Inferences    V1Inference[]
+  v1Behaviors     V1Behavior[]
+  v1Conversations V1Conversation[]
+
+  @@map("users")
+}
+
+model Portfolio {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  name            String
+  baseCurrency    String   @default("TWD") @map("base_currency")
+  benchmarkSymbol String?  @map("benchmark_symbol")
+  status          String   @default("active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user               User                @relation(fields: [userId], references: [id])
+  importBatches      ImportBatch[]
+  ledgerEntries      LedgerEntry[]
+  snapshots          PortfolioSnapshot[]
+  performanceMetrics PerformanceMetric[]
+  timeTravelReports  TimeTravelReport[]
+
+  @@map("portfolios")
+}
+
+model ImportBatch {
+  id            String    @id @default(uuid())
+  portfolioId   String    @map("portfolio_id")
+  sourcePayload Json      @map("source_payload")
+  status        String    @default("pending")
+  startedAt     DateTime? @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+
+  portfolio     Portfolio     @relation(fields: [portfolioId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@map("import_batches")
+}
+
+model Security {
+  id        String @id @default(uuid())
+  symbol    String
+  market    String
+  name      String
+  assetType String @map("asset_type")
+  currency  String
+
+  ledgerEntries      LedgerEntry[]
+  marketPrices       MarketPrice[]
+  analysisEvidences  AnalysisEvidence[]
+  timeTravelReports  TimeTravelReport[]
+
+  @@unique([market, symbol])
+  @@map("securities")
+}
+
+model LedgerEntry {
+  id               String   @id @default(uuid())
+  portfolioId      String   @map("portfolio_id")
+  importBatchId    String?  @map("import_batch_id")
+  sequence         Int
+  occurredOn       String   @map("occurred_on")
+  entryType        String   @map("entry_type")
+  securityId       String?  @map("security_id")
+  quantity         Decimal? @db.Decimal(20, 8)
+  unitPrice        Decimal? @map("unit_price") @db.Decimal(20, 8)
+  grossCashAmount  Decimal  @map("gross_cash_amount") @db.Decimal(20, 4)
+  feeAmount        Decimal  @map("fee_amount") @db.Decimal(20, 4)
+  reversalOfEntryId String? @map("reversal_of_entry_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  portfolio   Portfolio    @relation(fields: [portfolioId], references: [id])
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id])
+  security    Security?    @relation(fields: [securityId], references: [id])
+
+  @@unique([portfolioId, sequence])
+  @@index([portfolioId, occurredOn, sequence])
+  @@index([securityId, occurredOn])
+  @@map("ledger_entries")
+}
+
+model MarketPrice {
+  securityId String  @map("security_id")
+  tradedOn   String  @map("traded_on")
+  closePrice Decimal @map("close_price") @db.Decimal(20, 8)
+  source     String
+
+  security Security @relation(fields: [securityId], references: [id])
+
+  @@id([securityId, tradedOn])
+  @@map("market_prices")
+}
+
+model PortfolioSnapshot {
+  id          String   @id @default(uuid())
+  portfolioId String   @map("portfolio_id")
+  asOfDate    String   @map("as_of_date")
+  marketValue Decimal  @map("market_value") @db.Decimal(20, 4)
+  cashValue   Decimal  @map("cash_value") @db.Decimal(20, 4)
+  holdings    Json
+  calculatedAt DateTime @map("calculated_at")
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@unique([portfolioId, asOfDate])
+  @@map("portfolio_snapshots")
+}
+
+model PerformanceMetric {
+  id                 String   @id @default(uuid())
+  portfolioId        String   @map("portfolio_id")
+  asOfDate           String   @map("as_of_date")
+  xirr               Decimal? @db.Decimal(12, 8)
+  twr                Decimal? @db.Decimal(12, 8)
+  benchmarkReturn    Decimal? @map("benchmark_return") @db.Decimal(12, 8)
+  calculationVersion String   @map("calculation_version")
+  calculatedAt       DateTime @map("calculated_at")
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@unique([portfolioId, asOfDate])
+  @@map("performance_metrics")
+}
+
+model AnalysisEvidence {
+  id           String   @id @default(uuid())
+  securityId   String   @map("security_id")
+  evidenceType String   @map("evidence_type")
+  observedOn   String   @map("observed_on")
+  sourceName   String   @map("source_name")
+  payload      Json
+  contentText  String?  @map("content_text")
+  ingestedAt   DateTime @default(now()) @map("ingested_at")
+
+  security                 Security                  @relation(fields: [securityId], references: [id])
+  timeTravelReportEvidences TimeTravelReportEvidence[]
+
+  @@map("analysis_evidences")
+}
+
+model TimeTravelReport {
+  id               String   @id @default(uuid())
+  portfolioId      String   @map("portfolio_id")
+  securityId       String   @map("security_id")
+  asOfDate         String   @map("as_of_date")
+  sentiment        String
+  uiColor          String   @map("ui_color")
+  summary          String
+  complianceStatus String   @map("compliance_status")
+  promptVersion    String   @map("prompt_version")
+  generatedAt      DateTime @map("generated_at")
+
+  portfolio Portfolio  @relation(fields: [portfolioId], references: [id])
+  security  Security   @relation(fields: [securityId], references: [id])
+  evidences TimeTravelReportEvidence[]
+
+  @@map("time_travel_reports")
+}
+
+model TimeTravelReportEvidence {
+  reportId      String @map("report_id")
+  evidenceId    String @map("evidence_id")
+  citationOrder Int    @map("citation_order")
+
+  report   TimeTravelReport @relation(fields: [reportId], references: [id])
+  evidence AnalysisEvidence @relation(fields: [evidenceId], references: [id])
+
+  @@id([reportId, evidenceId])
+  @@map("time_travel_report_evidences")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V1 AI-Native Tables
+// ─────────────────────────────────────────────────────────────────────────────
+
+model V1Holding {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  weight    Int
+  cost      Decimal  @db.Decimal(12, 2)
+  plPercent Decimal  @map("pl_percent") @db.Decimal(8, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("v1_holdings")
+}
+
+model V1Principle {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  statement   String
+  confirmedAt String?  @map("confirmed_at")
+  source      String
+  paused      Boolean  @default(false)
+  badge       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("v1_principles")
+}
+
+model V1Memory {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  quote     String
+  date      String
+  source    String
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("v1_memories")
+}
+
+model V1Inference {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  statement  String
+  confidence String
+  evidence   String
+  status     String   @default("PENDING")
+  denyReason String?  @map("deny_reason")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("v1_inferences")
+}
+
+model V1Behavior {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  label     String
+  value     String
+  detail    String?
+  excluded  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("v1_behaviors")
+}
+
+model V1Conversation {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  prompt        String
+  selectedOption String? @map("selected_option")
+  hasResponded  Boolean  @default(false) @map("has_responded")
+  trigger       String?
+  conclusion    String?
+  artifactType  String?  @map("artifact_type")
+  artifactText  String?  @map("artifact_text")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user     User                    @relation(fields: [userId], references: [id])
+  messages V1ConversationMessage[]
+
+  @@map("v1_conversations")
+}
+
+model V1ConversationMessage {
+  id             String   @id @default(uuid())
+  conversationId String   @map("conversation_id")
+  role           String
+  text           String?
+  cardData       Json?    @map("card_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation V1Conversation @relation(fields: [conversationId], references: [id])
+
+  @@map("v1_conversation_messages")
+}
