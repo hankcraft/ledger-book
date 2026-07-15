@@ -11,9 +11,12 @@ import type {
   IContextService,
   IHomeService,
   IAgentService,
+  IPerformanceService,
   OnboardingInput,
   UserContext,
   ConversationSummary,
+  PerformanceTimeline,
+  TimePointEvent,
 } from "./types";
 import type { Holding, Principle, Behavior, DisplayMessage } from "../types";
 import {
@@ -264,6 +267,15 @@ class MockHomeService implements IHomeService {
     private readonly persist: () => void,
   ) {}
 
+  async getDailyPerformance() {
+    await delay(100);
+    return {
+      portfolioReturn: 1.2,
+      benchmarkReturn: 0.8,
+      asOf: new Date().toISOString().slice(0, 10),
+    };
+  }
+
   async getCurrentScenario() {
     await delay(200);
     const scenario = scenarios[this.state.scenarioIndex % scenarios.length]!;
@@ -364,6 +376,73 @@ class MockAgentService implements IAgentService {
   }
 }
 
+class MockPerformanceService implements IPerformanceService {
+  private readonly timeline: PerformanceTimeline;
+  private readonly events: Map<string, TimePointEvent>;
+
+  constructor() {
+    const points = this.generateTimeline(30);
+    this.timeline = {
+      points,
+      metrics: { xirr: 14.2, twr: 12.8, benchmarkReturn: 9.5 },
+    };
+    this.events = new Map([
+      [
+        points[5]!.date,
+        { date: points[5]!.date, type: "buy", summary: "買進台積電 2 張，均價 980 元" },
+      ],
+      [
+        points[12]!.date,
+        { date: points[12]!.date, type: "market", summary: "大盤單日跌幅 2.3%，AI 供應鏈全面回調" },
+      ],
+      [
+        points[18]!.date,
+        { date: points[18]!.date, type: "dividend", summary: "長榮配息入帳，每股 3.5 元" },
+      ],
+      [
+        points[25]!.date,
+        { date: points[25]!.date, type: "sell", summary: "賣出聯電 1 張，獲利 3.1%" },
+      ],
+    ]);
+  }
+
+  private generateTimeline(days: number) {
+    const points = [];
+    const today = new Date();
+    let portfolioAcc = 0;
+    let benchmarkAcc = 0;
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().slice(0, 10);
+
+      // Simulate daily returns with some variance
+      const pDaily = (Math.random() - 0.45) * 1.8;
+      const bDaily = (Math.random() - 0.45) * 1.0;
+      portfolioAcc += pDaily;
+      benchmarkAcc += bDaily;
+
+      points.push({
+        date: dateStr,
+        portfolioReturn: Math.round(portfolioAcc * 100) / 100,
+        benchmarkReturn: Math.round(benchmarkAcc * 100) / 100,
+      });
+    }
+    return points;
+  }
+
+  async getPerformanceTimeline(): Promise<PerformanceTimeline> {
+    await delay(150);
+    return clone(this.timeline);
+  }
+
+  async getTimePointEvent(date: string): Promise<TimePointEvent | null> {
+    await delay(100);
+    return this.events.get(date) ?? null;
+  }
+}
+
 export function createMockApiService(): IApiService {
   const state = loadMockBackendState();
   const persist = () => persistMockBackendState(state);
@@ -373,5 +452,6 @@ export function createMockApiService(): IApiService {
     context: new MockContextService(state, persist),
     home: new MockHomeService(state, persist),
     agent: new MockAgentService(),
+    performance: new MockPerformanceService(),
   };
 }

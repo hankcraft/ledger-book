@@ -5,23 +5,32 @@ import { useRouter } from "vue-router";
 import ActionOptions from "../components/ActionOptions.vue";
 import AttentionItem from "../components/AttentionItem.vue";
 import ContextualInsight from "../components/ContextualInsight.vue";
+import DailyPerformanceBanner from "../components/DailyPerformanceBanner.vue";
+import { BRAND } from "../constants/brand";
 import { useApi } from "../services";
+import type { DailyPerformance } from "../services/types";
 import type { Scenario } from "../types";
 
 const api = useApi();
 const router = useRouter();
 const scenario = shallowRef<Scenario | null>(null);
+const performance = shallowRef<DailyPerformance | null>(null);
 const error = shallowRef<string | null>(null);
 const loading = shallowRef(false);
 
-async function loadScenario(): Promise<void> {
+async function loadData(): Promise<void> {
   loading.value = true;
   error.value = null;
 
   try {
-    scenario.value = await api.home.getCurrentScenario();
+    const [perf, scen] = await Promise.all([
+      api.home.getDailyPerformance(),
+      api.home.getCurrentScenario(),
+    ]);
+    performance.value = perf;
+    scenario.value = scen;
   } catch {
-    error.value = "暫時無法整理你的投資情境，請稍後再試。";
+    error.value = "暫時無法整理你的投資狀況，請稍後再試。";
   } finally {
     loading.value = false;
   }
@@ -32,23 +41,29 @@ async function handleAction(action: string): Promise<void> {
     const { initialPrompt } = await api.home.selectAction(action);
     await router.push({ name: "agent", query: { prompt: initialPrompt } });
   } catch {
-    error.value = "暫時無法開始這段反思，請稍後再試。";
+    error.value = "暫時無法開始，請稍後再試。";
   }
 }
 
 onMounted(() => {
-  void loadScenario();
+  void loadData();
 });
 </script>
 
 <template>
   <main class="home" :aria-busy="loading">
     <header class="header">
-      <span class="logo">持倉鏡</span>
-      <button class="scenario-btn" :disabled="loading" @click="loadScenario">
-        {{ loading ? "整理中…" : "切換情境" }}
+      <span class="logo">{{ BRAND.appName }}</span>
+      <button class="refresh-btn" :disabled="loading" @click="loadData">
+        {{ loading ? "整理中…" : "換個角度看" }}
       </button>
     </header>
+
+    <DailyPerformanceBanner
+      v-if="performance"
+      :portfolio-return="performance.portfolioReturn"
+      :benchmark-return="performance.benchmarkReturn"
+    />
 
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
 
@@ -63,7 +78,7 @@ onMounted(() => {
       <ActionOptions :actions="scenario.actions" @select="handleAction" />
     </template>
 
-    <p v-else-if="loading" class="loading-message">正在整理你的投資情境…</p>
+    <p v-else-if="loading" class="loading-message">讓我看看今天的狀況…</p>
   </main>
 </template>
 
@@ -87,7 +102,7 @@ onMounted(() => {
   font-weight: 700;
 }
 
-.scenario-btn {
+.refresh-btn {
   font-size: var(--text-small);
   color: var(--muted);
   padding: var(--space-2) var(--space-3);
@@ -95,7 +110,7 @@ onMounted(() => {
   border-radius: var(--radius-control);
 }
 
-.scenario-btn:hover:not(:disabled) {
+.refresh-btn:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
 }

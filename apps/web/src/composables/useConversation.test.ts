@@ -53,6 +53,11 @@ function createConversationApi(options: ConversationApiOptions = {}): IApiServic
   };
 
   const home: IHomeService = {
+    getDailyPerformance: async () => ({
+      portfolioReturn: 0,
+      benchmarkReturn: 0,
+      asOf: "2026-01-01",
+    }),
     getCurrentScenario: async () => {
       throw new Error("not used");
     },
@@ -78,7 +83,19 @@ function createConversationApi(options: ConversationApiOptions = {}): IApiServic
     startConversation: async () => ({ conversationId: "conversation-1" }),
   };
 
-  return { onboarding, context, home, agent };
+  return {
+    onboarding,
+    context,
+    home,
+    agent,
+    performance: {
+      getPerformanceTimeline: async () => ({
+        points: [],
+        metrics: { xirr: 0, twr: 0, benchmarkReturn: 0 },
+      }),
+      getTimePointEvent: async () => null,
+    },
+  };
 }
 
 function selectedTurnCount(conversation: ReturnType<typeof useConversation>): number {
