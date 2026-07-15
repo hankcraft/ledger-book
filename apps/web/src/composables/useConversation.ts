@@ -4,7 +4,7 @@ import { useApi } from "../services";
 import type { ConversationSummary } from "../services/types";
 import type { DisplayMessage } from "../types";
 
-const defaultReflectionPrompt = "今天跌很多，我有點想全部賣掉。";
+const defaultReflectionPrompt = "最近有什麼讓我煩心的嗎？";
 
 function scrollToBottom(): void {
   if (typeof document === "undefined") return;
@@ -68,7 +68,7 @@ export function useConversation() {
       return generation === streamGeneration;
     } catch {
       if (generation === streamGeneration) {
-        error.value = "AI 助手暫時無法回應，請稍後再試。";
+        error.value = "搭檔暫時忙不過來，等一下再試？";
       }
       return false;
     } finally {
@@ -94,7 +94,7 @@ export function useConversation() {
       if (generation === streamGeneration) {
         isPlaying.value = false;
         isComplete.value = true;
-        error.value = "無法建立新對話，請稍後再試。";
+        error.value = "沒辦法開始新對話，等一下再試？";
       }
     }
   }
@@ -124,7 +124,7 @@ export function useConversation() {
       if (generation === streamGeneration) {
         isPlaying.value = false;
         isComplete.value = true;
-        error.value = "無法載入這段對話，請稍後再試。";
+        error.value = "沒辦法載入這段對話，等一下再試？";
       }
     }
   }
@@ -133,7 +133,7 @@ export function useConversation() {
     try {
       pastConversations.value = await api.agent.getPastConversations();
     } catch {
-      error.value = "無法載入過去的反思。";
+      error.value = "沒辦法載入對話紀錄。";
     }
   }
 
@@ -156,7 +156,7 @@ export function useConversation() {
       if (generation === streamGeneration) {
         isPlaying.value = false;
         isComplete.value = true;
-        error.value = "無法儲存你的選擇，請稍後再試。";
+        error.value = "沒成功，等一下再試？";
       }
       return false;
     }

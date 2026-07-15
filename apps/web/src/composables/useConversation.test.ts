@@ -125,7 +125,7 @@ describe("useConversation.selectOption", () => {
     await conversation.startNewConversation("初始問題");
 
     await expect(conversation.selectOption("我的部位是不是太重")).resolves.toBe(true);
-    expect(conversation.error.value).toBe("AI 助手暫時無法回應，請稍後再試。");
+    expect(conversation.error.value).toBe("搭檔暫時忙不過來，等一下再試？");
     expect(selectedTurnCount(conversation)).toBe(1);
   });
 });

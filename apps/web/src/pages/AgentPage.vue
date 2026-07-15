@@ -29,7 +29,7 @@ const {
 const userInput = ref("");
 const historyExpanded = ref(false);
 const selectedOption = ref<string | null>(null);
-const suggestedPills = ["今天庫存有變化嗎？", "回顧上次的決定", "我最近操作一致嗎？"];
+const suggestedPills = ["今天有什麼值得注意的？", "上次我們聊到哪？", "最近的操作有什麼趨勢？"];
 
 async function handleSend(): Promise<void> {
   const text = userInput.value.trim();
@@ -85,7 +85,7 @@ onMounted(() => {
     <header class="header">
       <div class="header-left">
         <h1 class="title">投資搭檔</h1>
-        <p class="subtitle">對話式反思</p>
+        <p class="subtitle">和搭檔聊聊</p>
       </div>
       <button class="new-conv-btn" :disabled="isPlaying" @click="handleNewConversation">
         + 新對話
@@ -112,12 +112,12 @@ onMounted(() => {
       </ChatMessage>
 
       <div v-if="messages.length === 0" class="empty">
-        <p>輸入你的想法，或選一個情境開始…</p>
+        <p>想聊什麼都可以，或選一個話題開始。</p>
       </div>
 
       <p v-if="error" class="error-message" role="alert">{{ error }}</p>
 
-      <div v-if="isPlaying" class="typing-indicator" aria-label="AI 正在思考">
+      <div v-if="isPlaying" class="typing-indicator" aria-label="搭檔正在整理…">
         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
       </div>
     </main>
@@ -151,7 +151,7 @@ onMounted(() => {
 
       <div class="history-section">
         <button class="history-toggle" @click="historyExpanded = !historyExpanded">
-          <span>過去的反思 ({{ pastConversations.length }})</span>
+          <span>對話紀錄 ({{ pastConversations.length }})</span>
           <span class="history-chevron" :class="{ open: historyExpanded }">▴</span>
         </button>
         <Transition name="expand">
