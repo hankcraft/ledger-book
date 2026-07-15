@@ -394,7 +394,13 @@ class RealAgentService implements IAgentService {
     const response = await this.fetch.request<{
       conversationId: string;
       contextSummary?: string;
-      messages?: Array<{ id: string; role: string; text?: string | null; cardData?: unknown }>;
+      messages?: Array<{
+        id: string;
+        role: string;
+        text?: string | null;
+        cardData?: unknown;
+        createdAt?: string;
+      }>;
     }>("POST", `/conversations/${conversationId}/resume`);
 
     // Map stored messages to DisplayMessage format
@@ -403,6 +409,7 @@ class RealAgentService implements IAgentService {
       role: m.role as "user" | "agent",
       text: m.text ?? undefined,
       card: m.cardData as DisplayMessage["card"],
+      timestamp: m.createdAt,
     }));
 
     return {

@@ -27,6 +27,7 @@ export interface StoredMessage {
   role: "user" | "agent";
   text?: string | null;
   cardData?: unknown;
+  createdAt: string;
 }
 
 export interface SaveMessageInput {
@@ -43,7 +44,7 @@ function toSummary(row: {
   artifactType: string | null;
   artifactText: string | null;
 }): V1ConversationSummary {
-  const dateStr = `${row.createdAt.getMonth() + 1}/${row.createdAt.getDate()}`;
+  const dateStr = `${row.createdAt.getMonth() + 1}/${row.createdAt.getDate()} ${row.createdAt.getHours()}:${String(row.createdAt.getMinutes()).padStart(2, "0")}`;
   return {
     id: row.id,
     date: dateStr,
@@ -113,6 +114,7 @@ export function createConversationService(db: PrismaClient): ConversationService
         role: r.role as "user" | "agent",
         text: r.text,
         cardData: r.cardData,
+        createdAt: r.createdAt.toISOString(),
       }));
     },
 
@@ -163,6 +165,7 @@ export function createConversationService(db: PrismaClient): ConversationService
         role: r.role as "user" | "agent",
         text: r.text,
         cardData: r.cardData,
+        createdAt: r.createdAt.toISOString(),
       }));
 
       return { conversationId: originalId, messages };

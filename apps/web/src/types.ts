@@ -124,4 +124,5 @@ export interface DisplayMessage {
   role: MessageRole;
   text?: string;
   card?: CardData;
+  timestamp?: string;
 }

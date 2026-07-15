@@ -145,7 +145,12 @@ onMounted(async () => {
 
       <!-- Conversation messages -->
       <template v-else>
-        <ChatMessage v-for="message in messages" :key="message.id" :role="message.role">
+        <ChatMessage
+          v-for="message in messages"
+          :key="message.id"
+          :role="message.role"
+          :timestamp="message.timestamp"
+        >
           <p v-if="message.text && message.role === 'user'" class="msg-text">{{ message.text }}</p>
           <MarkdownText
             v-else-if="message.text"

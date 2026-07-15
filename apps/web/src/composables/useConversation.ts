@@ -42,7 +42,8 @@ export function useConversation() {
   }
 
   function appendMessage(message: Omit<DisplayMessage, "id">, prefix: string): void {
-    messages.value.push({ id: nextMessageId(prefix), ...message });
+    const timestamp = message.timestamp ?? new Date().toISOString();
+    messages.value.push({ id: nextMessageId(prefix), ...message, timestamp });
     scrollToBottom();
   }
 
@@ -149,7 +150,10 @@ export function useConversation() {
       // Display past messages
       if (result.messages && result.messages.length > 0) {
         for (const msg of result.messages) {
-          appendMessage({ role: msg.role, text: msg.text, card: msg.card }, "history");
+          appendMessage(
+            { role: msg.role, text: msg.text, card: msg.card, timestamp: msg.timestamp },
+            "history",
+          );
         }
       } else if (result.contextSummary) {
         // Fallback: show context summary if no stored messages
