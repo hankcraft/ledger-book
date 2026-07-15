@@ -33,6 +33,7 @@ function createConversationApi(options: ConversationApiOptions = {}): IApiServic
     completeOnboarding: async () => emptyContext,
     getFinalInsight: async () => "",
     getMidInsight: async () => "",
+    applyTemplate: async () => emptyContext,
   };
 
   const context: IContextService = {

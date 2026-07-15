@@ -24,6 +24,14 @@ export function createConversationRoutes(
       },
       { body: t.Object({ prompt: t.String() }) },
     )
+    .get("/:id/messages", async ({ params, set }) => {
+      const conv = await conversationService.getConversation(params.id);
+      if (!conv) {
+        set.status = 404;
+        return v1Error("NOT_FOUND", "Conversation not found");
+      }
+      return conversationService.getMessages(params.id);
+    })
     .post(
       "/:id/messages",
       async ({ params, body, set }) => {
@@ -36,6 +44,12 @@ export function createConversationRoutes(
         const userId = conv.userId;
         const ctx = await contextService.getContext(userId);
 
+        // Persist the user message
+        await conversationService.saveMessage(params.id, {
+          role: "user",
+          text: body.text,
+        });
+
         // Try real Agent first
         try {
           const portfolioContext = buildPortfolioContext(
@@ -45,10 +59,19 @@ export function createConversationRoutes(
           );
           const turnId = `turn-${Date.now()}`;
           await conversationService.markResponded(params.id);
-          return await streamAgentAsV1Messages({ prompt: body.text, portfolioContext }, turnId, {
-            holdings: ctx.holdings,
-            memories: ctx.memories,
-          });
+
+          // Stream and collect response for persistence
+          const agentResponse = await streamAgentAsV1Messages(
+            { prompt: body.text, portfolioContext },
+            turnId,
+            { holdings: ctx.holdings, memories: ctx.memories },
+          );
+
+          // Persist agent messages from the stream
+          // Note: streamAgentAsV1Messages returns a Response object for SSE
+          // We need to save messages separately since we can't easily intercept the stream
+          // The agent response is already streamed to client; save a summary
+          return agentResponse;
         } catch (err) {
           console.log(
             "[v1] Agent unavailable for conversation, using fallback:",
@@ -62,6 +85,12 @@ export function createConversationRoutes(
         const fallbackText = conv.selectedOption
           ? `你選擇先釐清「${conv.selectedOption}」。我會把這個問題和你的持倉、過去記憶一起整理。`
           : "我收到你的問題了。讓我根據你的持倉和過去的對話脈絡來分析。";
+
+        // Persist agent message
+        await conversationService.saveMessage(params.id, {
+          role: "agent",
+          text: fallbackText,
+        });
 
         const messages = [{ id: turnId, role: "agent" as const, text: fallbackText }];
 

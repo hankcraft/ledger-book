@@ -10,7 +10,7 @@ function scrollToBottom(): void {
   if (typeof document === "undefined") return;
 
   void nextTick(() => {
-    const element = document.querySelector<HTMLElement>(".message-list");
+    const element = document.querySelector<HTMLElement>(".message-area");
     if (element) element.scrollTop = element.scrollHeight;
   });
 }
@@ -79,6 +79,10 @@ export function useConversation() {
     }
   }
 
+  /**
+   * Start a brand new conversation with a prompt.
+   * Used only for the very first message (no existing conversation).
+   */
   async function startNewConversation(prompt: string): Promise<void> {
     const generation = resetConversation();
     isPlaying.value = true;
@@ -99,6 +103,26 @@ export function useConversation() {
     }
   }
 
+  /**
+   * Send a follow-up message in the current conversation.
+   * If no conversation exists yet, starts a new one.
+   */
+  async function sendMessage(text: string): Promise<void> {
+    if (!text.trim() || isPlaying.value) return;
+
+    // If no current conversation, start fresh
+    if (!currentConversationId.value) {
+      await startNewConversation(text);
+      return;
+    }
+
+    // Continue in current conversation
+    const generation = streamGeneration;
+    error.value = null;
+    appendMessage({ role: "user", text }, "user");
+    await streamAgentReply(currentConversationId.value, text, generation);
+  }
+
   async function startDefaultConversation(): Promise<void> {
     await startNewConversation(defaultReflectionPrompt);
   }
@@ -108,16 +132,30 @@ export function useConversation() {
     isComplete.value = true;
   }
 
+  /**
+   * Resume a past conversation — loads and displays all previous messages,
+   * then sets the conversation as active for follow-up messages.
+   */
   async function resumeConversation(id: string): Promise<void> {
     const generation = resetConversation();
     isPlaying.value = true;
 
     try {
-      const { conversationId, contextSummary } = await api.agent.resumeConversation(id);
+      const result = await api.agent.resumeConversation(id);
       if (generation !== streamGeneration) return;
 
-      currentConversationId.value = conversationId;
-      appendMessage({ role: "agent", text: contextSummary }, "resume");
+      currentConversationId.value = result.conversationId;
+
+      // Display past messages
+      if (result.messages && result.messages.length > 0) {
+        for (const msg of result.messages) {
+          appendMessage({ role: msg.role, text: msg.text, card: msg.card }, "history");
+        }
+      } else if (result.contextSummary) {
+        // Fallback: show context summary if no stored messages
+        appendMessage({ role: "agent", text: result.contextSummary }, "resume");
+      }
+
       isPlaying.value = false;
       isComplete.value = true;
     } catch {
@@ -172,6 +210,7 @@ export function useConversation() {
     beginNewConversation,
     startDefaultConversation,
     startNewConversation,
+    sendMessage,
     resumeConversation,
     loadPastConversations,
     selectOption,

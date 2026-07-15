@@ -36,7 +36,7 @@ function selectOption(option: string): void {
         {{ option }}
       </button>
     </div>
-    <p v-if="selectedOption" class="feedback">✓ 我會依照你的選擇繼續整理。</p>
+    <p v-if="selectedOption" class="feedback">✓ {{ selectedOption }}</p>
   </div>
 </template>
 

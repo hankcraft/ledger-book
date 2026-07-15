@@ -5,12 +5,14 @@ export interface ConversationService {
   listConversations(userId: string): Promise<V1ConversationSummary[]>;
   createConversation(userId: string, prompt: string): Promise<string>;
   getConversation(conversationId: string): Promise<ConversationState | null>;
+  getMessages(conversationId: string): Promise<StoredMessage[]>;
+  saveMessage(conversationId: string, message: SaveMessageInput): Promise<void>;
   markResponded(conversationId: string): Promise<void>;
   selectOption(conversationId: string, option: string): Promise<boolean>;
   resumeConversation(
     userId: string,
     originalId: string,
-  ): Promise<{ conversationId: string; contextSummary: string }>;
+  ): Promise<{ conversationId: string; messages: StoredMessage[] }>;
 }
 
 export interface ConversationState {
@@ -18,6 +20,19 @@ export interface ConversationState {
   userId: string;
   selectedOption: string | null;
   hasResponded: boolean;
+}
+
+export interface StoredMessage {
+  id: string;
+  role: "user" | "agent";
+  text?: string | null;
+  cardData?: unknown;
+}
+
+export interface SaveMessageInput {
+  role: "user" | "agent";
+  text?: string | null;
+  cardData?: unknown;
 }
 
 function toSummary(row: {
@@ -70,6 +85,30 @@ export function createConversationService(db: PrismaClient): ConversationService
       };
     },
 
+    async getMessages(conversationId) {
+      const rows = await db.v1ConversationMessage.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "asc" },
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        role: r.role as "user" | "agent",
+        text: r.text,
+        cardData: r.cardData,
+      }));
+    },
+
+    async saveMessage(conversationId, message) {
+      await db.v1ConversationMessage.create({
+        data: {
+          conversationId,
+          role: message.role,
+          text: message.text ?? null,
+          cardData: message.cardData ?? undefined,
+        },
+      });
+    },
+
     async markResponded(conversationId) {
       await db.v1Conversation.update({
         where: { id: conversationId },
@@ -89,14 +128,26 @@ export function createConversationService(db: PrismaClient): ConversationService
     },
 
     async resumeConversation(userId, originalId) {
-      const conv = await db.v1Conversation.create({
-        data: {
-          userId,
-          prompt: `延續對話 ${originalId}`,
-          hasResponded: true,
-        },
+      // Verify conversation belongs to user
+      const conv = await db.v1Conversation.findUnique({ where: { id: originalId } });
+      if (!conv || conv.userId !== userId) {
+        return { conversationId: originalId, messages: [] };
+      }
+
+      // Return the original conversation ID and its stored messages
+      const rows = await db.v1ConversationMessage.findMany({
+        where: { conversationId: originalId },
+        orderBy: { createdAt: "asc" },
       });
-      return { conversationId: conv.id, contextSummary: `延續上次對話 ${originalId} 的脈絡…` };
+
+      const messages: StoredMessage[] = rows.map((r) => ({
+        id: r.id,
+        role: r.role as "user" | "agent",
+        text: r.text,
+        cardData: r.cardData,
+      }));
+
+      return { conversationId: originalId, messages };
     },
   };
 }
