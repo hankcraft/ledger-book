@@ -1,8 +1,26 @@
 <script setup lang="ts">
-import { useAppStore } from "./composables/useAppStore";
+import { onMounted, onUnmounted } from "vue";
+
+import AppDrawer from "./components/AppDrawer.vue";
+import QuickEntryForm from "./components/QuickEntryForm.vue";
 import TabBar from "./components/TabBar.vue";
+import { useAppStore } from "./composables/useAppStore";
+import { useQuickEntry } from "./composables/useQuickEntry";
 
 const { state } = useAppStore();
+const { drawerOpen, closeDrawer, openDrawer } = useQuickEntry();
+
+function handleGlobalOpen(): void {
+  openDrawer();
+}
+
+onMounted(() => {
+  window.addEventListener("open-quick-entry", handleGlobalOpen);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("open-quick-entry", handleGlobalOpen);
+});
 </script>
 
 <template>
@@ -18,6 +36,10 @@ const { state } = useAppStore();
     </Transition>
 
     <TabBar v-if="state.onboardingComplete" />
+
+    <AppDrawer :open="drawerOpen" title="新增交易" @close="closeDrawer">
+      <QuickEntryForm @success="closeDrawer" />
+    </AppDrawer>
   </div>
 </template>
 
