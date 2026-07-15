@@ -201,13 +201,14 @@ model TimeTravelReportEvidence {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model V1Holding {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  name      String
-  weight    Int
-  cost      Decimal  @db.Decimal(12, 2)
-  plPercent Decimal  @map("pl_percent") @db.Decimal(8, 2)
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  name         String
+  weight       Int
+  cost         Decimal  @db.Decimal(12, 2)
+  plPercent    Decimal  @map("pl_percent") @db.Decimal(8, 2)
+  purchaseDate String?  @map("purchase_date")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id])
 

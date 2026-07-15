@@ -59,6 +59,6 @@ export function createApp(config: AppConfig) {
     .use(createOnboardingRoutes(contextService, getUserId))
     .use(createContextRoutes(contextService, getUserId))
     .use(createHomeRoutes(contextService, getUserId))
-    .use(createPerformanceRoutes(portfolioService, getPortfolioId))
+    .use(createPerformanceRoutes(portfolioService, getPortfolioId, db))
     .use(createConversationRoutes(conversationService, contextService, getUserId));
 }

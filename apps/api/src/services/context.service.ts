@@ -7,6 +7,7 @@ import type {
   V1Inference,
   V1Behavior,
 } from "@ledger-book/contracts";
+import { findTemplate, type LedgerTemplate } from "../data/ledger-templates.ts";
 
 export interface ContextService {
   getContext(userId: string): Promise<V1UserContext>;
@@ -21,6 +22,7 @@ export interface ContextService {
     text: string,
   ): Promise<{ response: string; inferences: V1Inference[] }>;
   completeOnboarding(userId: string, data: OnboardingData): Promise<V1UserContext>;
+  applyTemplate(userId: string, templateId: string): Promise<V1UserContext>;
 }
 
 export interface OnboardingData {
@@ -37,14 +39,17 @@ function toHolding(row: {
   weight: number;
   cost: unknown;
   plPercent: unknown;
+  purchaseDate?: string | null;
 }): V1Holding {
-  return {
+  const h: V1Holding = {
     id: row.id,
     name: row.name,
     weight: row.weight,
     cost: Number(row.cost),
     plPercent: Number(row.plPercent),
   };
+  if (row.purchaseDate) h.purchaseDate = row.purchaseDate;
+  return h;
 }
 
 function toPrinciple(row: {
@@ -111,6 +116,177 @@ function toBehavior(row: {
   const b: V1Behavior = { id: row.id, label: row.label, value: row.value, excluded: row.excluded };
   if (row.detail) b.detail = row.detail;
   return b;
+}
+
+const DEFAULT_PORTFOLIO_ID = "demo-portfolio";
+const BENCHMARK_SYMBOL = "0050";
+
+/**
+ * Seeds portfolio-level data (securities, ledger entries, market prices)
+ * from a template so the performance page has data to render.
+ */
+async function seedPortfolioFromTemplate(
+  db: PrismaClient,
+  userId: string,
+  template: LedgerTemplate,
+): Promise<void> {
+  const portfolioId = DEFAULT_PORTFOLIO_ID;
+
+  // Ensure portfolio exists
+  await db.portfolio.upsert({
+    where: { id: portfolioId },
+    update: {},
+    create: {
+      id: portfolioId,
+      userId,
+      name: "台股核心－衛星帳本",
+      baseCurrency: "TWD",
+      benchmarkSymbol: BENCHMARK_SYMBOL,
+    },
+  });
+
+  // Clear existing ledger entries and market prices for a clean slate
+  await db.ledgerEntry.deleteMany({ where: { portfolioId } });
+
+  // Upsert securities and collect IDs
+  const holdingSecurities: Array<{ securityId: string; holding: (typeof template.holdings)[0] }> =
+    [];
+  for (const h of template.holdings) {
+    const security = await db.security.upsert({
+      where: { market_symbol: { market: "TWSE", symbol: h.name } },
+      update: {},
+      create: {
+        symbol: h.name,
+        market: "TWSE",
+        name: h.name,
+        assetType: "stock",
+        currency: "TWD",
+      },
+    });
+    holdingSecurities.push({ securityId: security.id, holding: h });
+  }
+
+  // Upsert benchmark security (0050)
+  const benchmark = await db.security.upsert({
+    where: { market_symbol: { market: "TWSE", symbol: BENCHMARK_SYMBOL } },
+    update: {},
+    create: {
+      symbol: BENCHMARK_SYMBOL,
+      market: "TWSE",
+      name: "元大台灣50",
+      assetType: "etf",
+      currency: "TWD",
+    },
+  });
+
+  // Determine timeline: earliest purchase date → today
+  const purchaseDates = template.holdings.map((h) => h.purchaseDate).toSorted();
+  const earliestDate = purchaseDates[0]!;
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Calculate total investment (assume 1000 shares per holding for simplicity)
+  const SHARES_PER_HOLDING = 1000;
+  const totalInvestment = template.holdings.reduce(
+    (sum, h) => sum + h.cost * SHARES_PER_HOLDING,
+    0,
+  );
+
+  // Create ledger entries: one cash deposit + one buy per holding
+  let sequence = 1;
+
+  // Cash deposit on earliest date
+  await db.ledgerEntry.create({
+    data: {
+      portfolioId,
+      sequence: sequence++,
+      occurredOn: earliestDate,
+      entryType: "cash_deposit",
+      grossCashAmount: totalInvestment,
+      feeAmount: 0,
+    },
+  });
+
+  // Buy entries for each holding
+  for (const { securityId, holding } of holdingSecurities) {
+    await db.ledgerEntry.create({
+      data: {
+        portfolioId,
+        sequence: sequence++,
+        occurredOn: holding.purchaseDate,
+        entryType: "buy",
+        securityId,
+        quantity: SHARES_PER_HOLDING,
+        unitPrice: holding.cost,
+        grossCashAmount: -(holding.cost * SHARES_PER_HOLDING),
+        feeAmount: 0,
+      },
+    });
+  }
+
+  // Seed market prices: purchase-date price + today's price for each security
+  // Generate intermediate weekly prices for a smoother chart
+  for (const { securityId, holding } of holdingSecurities) {
+    const currentPrice = holding.cost * (1 + holding.plPercent / 100);
+    const dates = generateWeeklyDates(holding.purchaseDate, today);
+
+    const priceData = dates.map((date, i) => {
+      // Linear interpolation from cost → currentPrice
+      const progress = dates.length > 1 ? i / (dates.length - 1) : 1;
+      const price = holding.cost + (currentPrice - holding.cost) * progress;
+      return {
+        securityId,
+        tradedOn: date,
+        closePrice: Math.round(price * 100) / 100,
+        source: "template",
+      };
+    });
+
+    for (const p of priceData) {
+      await db.marketPrice.upsert({
+        where: { securityId_tradedOn: { securityId: p.securityId, tradedOn: p.tradedOn } },
+        update: { closePrice: p.closePrice },
+        create: p,
+      });
+    }
+  }
+
+  // Benchmark prices: simulate ~5% return over the same period
+  const benchmarkDates = generateWeeklyDates(earliestDate, today);
+  const benchmarkBasePrice = 150; // approximate 0050 price
+  for (let i = 0; i < benchmarkDates.length; i++) {
+    const progress = benchmarkDates.length > 1 ? i / (benchmarkDates.length - 1) : 1;
+    const price = benchmarkBasePrice * (1 + 0.05 * progress);
+    await db.marketPrice.upsert({
+      where: { securityId_tradedOn: { securityId: benchmark.id, tradedOn: benchmarkDates[i]! } },
+      update: { closePrice: Math.round(price * 100) / 100 },
+      create: {
+        securityId: benchmark.id,
+        tradedOn: benchmarkDates[i]!,
+        closePrice: Math.round(price * 100) / 100,
+        source: "template",
+      },
+    });
+  }
+}
+
+/** Generate weekly date strings between start and end (inclusive of both). */
+function generateWeeklyDates(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const current = new Date(start);
+  const endDate = new Date(end);
+
+  while (current <= endDate) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setDate(current.getDate() + 7);
+  }
+
+  // Always include the end date
+  const lastDate = dates.at(-1);
+  if (lastDate !== end && new Date(end) > new Date(lastDate!)) {
+    dates.push(end);
+  }
+
+  return dates;
 }
 
 export function createContextService(db: PrismaClient): ContextService {
@@ -241,6 +417,77 @@ export function createContextService(db: PrismaClient): ContextService {
       });
 
       // Return full context
+      return this.getContext(userId);
+    },
+
+    async applyTemplate(userId, templateId) {
+      const template = findTemplate(templateId);
+      if (!template) {
+        throw new Error(`Template "${templateId}" not found`);
+      }
+
+      // Clear existing V1 context for this user
+      await Promise.all([
+        db.v1Holding.deleteMany({ where: { userId } }),
+        db.v1Principle.deleteMany({ where: { userId } }),
+        db.v1Memory.deleteMany({ where: { userId } }),
+        db.v1Inference.deleteMany({ where: { userId } }),
+        db.v1Behavior.deleteMany({ where: { userId } }),
+      ]);
+
+      // Bulk-insert template data
+      await Promise.all([
+        db.v1Holding.createMany({
+          data: template.holdings.map((h) => ({
+            userId,
+            name: h.name,
+            weight: h.weight,
+            cost: h.cost,
+            plPercent: h.plPercent,
+            purchaseDate: h.purchaseDate,
+          })),
+        }),
+        db.v1Principle.createMany({
+          data: template.principles.map((p) => ({
+            userId,
+            statement: p.statement,
+            confirmedAt: p.confirmedAt,
+            source: p.source,
+            paused: p.paused,
+          })),
+        }),
+        db.v1Memory.createMany({
+          data: template.memories.map((m) => ({
+            userId,
+            quote: m.quote,
+            date: m.date,
+            source: m.source,
+            archived: false,
+          })),
+        }),
+        db.v1Inference.createMany({
+          data: template.inferences.map((i) => ({
+            userId,
+            statement: i.statement,
+            confidence: i.confidence,
+            evidence: i.evidence,
+            status: "PENDING",
+          })),
+        }),
+        db.v1Behavior.createMany({
+          data: template.behaviors.map((b) => ({
+            userId,
+            label: b.label,
+            value: b.value,
+            detail: b.detail ?? null,
+            excluded: false,
+          })),
+        }),
+      ]);
+
+      // ── Seed portfolio data so the performance page can render ──
+      await seedPortfolioFromTemplate(db, userId, template);
+
       return this.getContext(userId);
     },
   };
