@@ -252,45 +252,66 @@ async function seedPortfolioFromTemplate(
     });
   }
 
-  // Seed market prices: purchase-date price + today's price for each security
-  // Generate intermediate weekly prices for a smoother chart
+  // Build a unified set of all timeline dates (weekly from each holding's purchase).
+  // Every security (including benchmark) will have a price at every relevant date
+  // so that priceOnOrBefore always finds an exact match and avoids stale-price jumps.
+  const allTimelineDates = new Set<string>();
+  for (const { holding } of holdingSecurities) {
+    for (const d of generateWeeklyDates(holding.purchaseDate, today)) {
+      allTimelineDates.add(d);
+    }
+  }
+  const sortedTimelineDates = [...allTimelineDates].toSorted();
+
+  // Total days for time-based interpolation
+  const totalDays = Math.max(
+    1,
+    (new Date(today).getTime() - new Date(earliestDate).getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  // Seed market prices for each holding at ALL timeline dates from its purchase onward
   for (const { securityId, holding } of holdingSecurities) {
     const currentPrice = holding.cost * (1 + holding.plPercent / 100);
-    const dates = generateWeeklyDates(holding.purchaseDate, today);
+    const purchaseTime = new Date(holding.purchaseDate).getTime();
+    const holdingTotalDays = Math.max(
+      1,
+      (new Date(today).getTime() - purchaseTime) / (1000 * 60 * 60 * 24),
+    );
 
-    const priceData = dates.map((date, i) => {
-      // Linear interpolation from cost → currentPrice
-      const progress = dates.length > 1 ? i / (dates.length - 1) : 1;
+    // Only seed dates on or after this holding's purchase date
+    const holdingDates = sortedTimelineDates.filter((d) => new Date(d).getTime() >= purchaseTime);
+
+    for (const date of holdingDates) {
+      const daysSincePurchase = (new Date(date).getTime() - purchaseTime) / (1000 * 60 * 60 * 24);
+      const progress = daysSincePurchase / holdingTotalDays;
       const price = holding.cost + (currentPrice - holding.cost) * progress;
-      return {
-        securityId,
-        tradedOn: date,
-        closePrice: Math.round(price * 100) / 100,
-        source: "template",
-      };
-    });
-
-    for (const p of priceData) {
       await db.marketPrice.upsert({
-        where: { securityId_tradedOn: { securityId: p.securityId, tradedOn: p.tradedOn } },
-        update: { closePrice: p.closePrice },
-        create: p,
+        where: { securityId_tradedOn: { securityId, tradedOn: date } },
+        update: { closePrice: Math.round(price * 100) / 100 },
+        create: {
+          securityId,
+          tradedOn: date,
+          closePrice: Math.round(price * 100) / 100,
+          source: "template",
+        },
       });
     }
   }
 
-  // Benchmark prices: simulate ~5% return over the same period
-  const benchmarkDates = generateWeeklyDates(earliestDate, today);
+  // Benchmark prices: simulate ~5% return over the same period.
+  // Seed at every unified timeline date so priceOnOrBefore always has an exact match.
   const benchmarkBasePrice = 150; // approximate 0050 price
-  for (let i = 0; i < benchmarkDates.length; i++) {
-    const progress = benchmarkDates.length > 1 ? i / (benchmarkDates.length - 1) : 1;
+  for (const date of sortedTimelineDates) {
+    const daysSinceStart =
+      (new Date(date).getTime() - new Date(earliestDate).getTime()) / (1000 * 60 * 60 * 24);
+    const progress = daysSinceStart / totalDays;
     const price = benchmarkBasePrice * (1 + 0.05 * progress);
     await db.marketPrice.upsert({
-      where: { securityId_tradedOn: { securityId: benchmark.id, tradedOn: benchmarkDates[i]! } },
+      where: { securityId_tradedOn: { securityId: benchmark.id, tradedOn: date } },
       update: { closePrice: Math.round(price * 100) / 100 },
       create: {
         securityId: benchmark.id,
-        tradedOn: benchmarkDates[i]!,
+        tradedOn: date,
         closePrice: Math.round(price * 100) / 100,
         source: "template",
       },
