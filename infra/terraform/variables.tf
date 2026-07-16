@@ -45,3 +45,9 @@ variable "agent_runtime_name" {
   type        = string
   default     = "cmoney_stock_node"
 }
+
+variable "github_repository" {
+  description = "GitHub repository in format 'owner/repo' for OIDC trust policy"
+  type        = string
+  default     = "hankcraft/ledger-book"
+}
