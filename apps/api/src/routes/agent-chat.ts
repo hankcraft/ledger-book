@@ -3,6 +3,7 @@ import type { PortfolioService } from "../services/portfolio.service.ts";
 import type { LedgerService } from "../services/ledger.service.ts";
 import type { ImportService } from "../services/import.service.ts";
 import { apiError } from "../lib/errors.ts";
+import { invokeAgent } from "../agent-client.ts";
 
 export function createAgentChatRoutes(
   portfolioService: PortfolioService,
@@ -19,7 +20,6 @@ export function createAgentChatRoutes(
         return apiError("demo_import_required", "請先匯入 Fake Demo。");
       }
 
-      const agentEndpoint = Bun.env.AGENT_ENDPOINT ?? "http://localhost:8080";
       const ledger = await ledgerService.getEntries(defaultPortfolioId);
       const dashboard = await portfolioService.getDashboard(defaultPortfolioId, "2025-12-31");
 
@@ -41,7 +41,7 @@ export function createAgentChatRoutes(
         )
         .join("\n");
 
-      const context = [
+      const portfolioContext = [
         "## 用戶持股組合",
         holdingsSummary,
         "",
@@ -49,32 +49,24 @@ export function createAgentChatRoutes(
         ledgerSummary,
       ].join("\n");
 
-      const prompt = `${context}\n\n---\n\n用戶提問：${body.message}`;
-
       try {
-        const res = await fetch(`${agentEndpoint}/invocations`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
+        const agentText = await invokeAgent({
+          prompt: body.message,
+          portfolioContext,
+          timeout: 60_000,
         });
 
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          console.error(`[agent-chat] Agent responded ${res.status}: ${text.slice(0, 200)}`);
-          set.status = 502;
-          return apiError("agent_unavailable", "AI 助手暫時無法回應，請稍後再試。");
-        }
+        // Stream the response as SSE for compatibility
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          async start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(agentText)}\n\n`));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          },
+        });
 
-        if (!res.body) {
-          set.status = 502;
-          return apiError("agent_invalid_response", "AI 助手回應格式異常。");
-        }
-
-        set.headers["content-type"] = "text/event-stream";
-        set.headers["cache-control"] = "no-cache";
-        set.headers["connection"] = "keep-alive";
-
-        return new Response(res.body, {
+        return new Response(stream, {
           headers: {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",

@@ -80,8 +80,32 @@ export function createConversationRoutes(
           text: agentText,
         });
 
-        // Build SSE messages to stream to client (text only, no background cards)
-        const messages: Array<{ id: string; role: "agent"; text?: string; card?: unknown }> = [
+        // Build SSE messages to stream to client
+        const messages: Array<{ id: string; role: "agent"; text?: string; card?: unknown }> = [];
+
+        // Emit context-summary card only on the first response of a conversation
+        if (!conv.hasResponded) {
+          const holdings = ctx.holdings;
+          const topHolding = holdings.reduce(
+            (max, h) => (h.weight > max.weight ? h : max),
+            holdings[0]!,
+          );
+          messages.push({
+            id: `${turnId}-context`,
+            role: "agent",
+            card: {
+              type: "context-summary",
+              portfolio: {
+                totalStocks: holdings.length,
+                topHolding: topHolding.name,
+                topWeight: topHolding.weight,
+              },
+              marketSnapshot: "資料截至最近交易日",
+            },
+          });
+        }
+
+        messages.push(
           { id: `${turnId}-text`, role: "agent", text: agentText },
           {
             id: `${turnId}-question`,
@@ -92,7 +116,7 @@ export function createConversationRoutes(
               options: ["持股集中度分析", "法人最近動態", "我的操作模式是否一致"],
             },
           },
-        ];
+        );
 
         // Stream as SSE
         const encoder = new TextEncoder();

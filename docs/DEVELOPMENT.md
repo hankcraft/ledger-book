@@ -9,7 +9,7 @@ Ledger Book demonstrates a low-friction portfolio import, XIRR/TWR performance v
 Requires Bun and Docker (for PostgreSQL).
 
 ```sh
-docker compose up -d          # Start PostgreSQL + Redis
+docker compose up -d          # Start PostgreSQL
 bun install
 cd apps/api && bun run db:push  # Apply schema to local DB
 cd ../..
@@ -120,8 +120,8 @@ POST /api/v1/conversations/:id/select
 [C4 handoff](architecture/c4-model.md) and [LikeC4 source](architecture/ledger-book.c4) describe the persistent target MVP:
 
 - PostgreSQL: immutable ledger, prices, evidence, snapshots, report audit, V1 user context.
-- Redis: dashboard and passed-report cache only (future).
-- AWS Bedrock: external AgentCore and Knowledge Base containers. The API calls AgentCore synchronously; the seed loader indexes authorized RAG chunks.
+- Agent Runtime: Node.js 22 AgentCore-compatible server. Queries OpenSearch Serverless for structured market data and invokes Bedrock Nova Pro for analysis. The API calls the agent via HTTP/SSE.
+- OpenSearch Serverless: 8 stock market indices (ingested from CMoney CSV via `apps/agent/scripts/ingest-opensearch.ts`).
 - No queue, worker, authentication, live quote API, or mixed-currency support in this MVP.
 
 The C4 model is architecture intent, not a claim about every feature being production-ready. Update `c4-model.md` and `ledger-book.c4` together when container responsibilities or cross-boundary calls change.

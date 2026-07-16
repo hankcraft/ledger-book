@@ -441,37 +441,69 @@ console.log(body.result);
 
 ---
 
-## Bypassing the Agent: Direct KB Query
+## Bypassing the Agent: Direct OpenSearch Query
 
-If you only need data retrieval without the FM analysis layer, call the Knowledge Base directly:
+If you only need data retrieval without the FM analysis layer, query OpenSearch Serverless directly with SigV4-signed requests:
 
 ```typescript
-import {
-  BedrockAgentRuntimeClient,
-  RetrieveCommand,
-} from "@aws-sdk/client-bedrock-agent-runtime";
+import { defaultProvider } from "@aws-sdk/credential-provider-node";
+import { SignatureV4 } from "@smithy/signature-v4";
+import { Sha256 } from "@aws-crypto/sha256-js";
+import { HttpRequest } from "@smithy/protocol-http";
 
-const client = new BedrockAgentRuntimeClient({ region: "us-east-1" });
+const OPENSEARCH_ENDPOINT = process.env.OPENSEARCH_ENDPOINT!;
+const REGION = "us-east-1";
 
-const response = await client.send(
-  new RetrieveCommand({
-    knowledgeBaseId: "UFI6HOXTPE",
-    retrievalQuery: { text: "台積電 2330 的殖利率和法人持股" },
-    retrievalConfiguration: {
-      vectorSearchConfiguration: { numberOfResults: 5 },
-    },
-  }),
-);
+const signer = new SignatureV4({
+  service: "aoss",
+  region: REGION,
+  credentials: defaultProvider(),
+  sha256: Sha256,
+});
 
-for (const item of response.retrievalResults ?? []) {
-  console.log(item.content?.text);
-  console.log(`  Score: ${item.score?.toFixed(3)}`);
-  console.log(`  Source: ${item.location?.s3Location?.uri}`);
-  console.log();
+async function queryStockData(index: string, body: object): Promise<unknown> {
+  const url = new URL(`/${index}/_search`, OPENSEARCH_ENDPOINT);
+  const request = new HttpRequest({
+    method: "POST",
+    hostname: url.hostname,
+    path: url.pathname,
+    headers: { host: url.hostname, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const signed = await signer.sign(request);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: signed.headers as Record<string, string>,
+    body: JSON.stringify(body),
+  });
+
+  return res.json();
 }
+
+// Example: Get institutional trading for TSMC (2330)
+const results = await queryStockData("stock-institutional", {
+  query: { term: { stock_code: "2330" } },
+  size: 10,
+  sort: [{ date: { order: "desc" } }],
+});
+console.log(results);
 ```
 
-### KB Retrieve IAM Policy
+### Available Indices
+
+| Index | Content |
+|-------|---------|
+| `stock-summary` | Company overview and fundamentals |
+| `stock-price` | Historical price data |
+| `stock-institutional` | Institutional (法人) trading data |
+| `stock-returns` | Return metrics |
+| `stock-momentum` | Technical momentum indicators |
+| `stock-forum` | Social discussion sentiment |
+| `stock-dividend` | Dividend history |
+| `stock-industry` | Industry classification |
+
+### OpenSearch IAM Policy
 
 ```json
 {
@@ -479,12 +511,14 @@ for (const item of response.retrievalResults ?? []) {
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["bedrock:Retrieve", "bedrock:RetrieveAndGenerate"],
-      "Resource": "arn:aws:bedrock:us-east-1:414208189972:knowledge-base/UFI6HOXTPE"
+      "Action": "aoss:APIAccessAll",
+      "Resource": "arn:aws:aoss:us-east-1:414208189972:collection/<collection-id>"
     }
   ]
 }
 ```
+
+> **Note:** You must also be listed in the OpenSearch Serverless data access policy for the collection.
 
 ---
 
@@ -531,7 +565,7 @@ const client = new BedrockAgentCoreClient({
 | Metric | Value |
 |--------|-------|
 | Cold start (first invoke after idle) | <1 second |
-| Warm invoke (KB retrieve + FM generation) | 8-20 seconds |
+| Warm invoke (OpenSearch query + FM generation) | 8-20 seconds |
 | Idle timeout (session auto-stop) | 600 seconds (configurable) |
 | Max session lifetime | 3600 seconds |
 | Concurrent sessions | Managed by AgentCore (auto-scales) |
@@ -540,7 +574,7 @@ const client = new BedrockAgentCoreClient({
 
 - The Node.js runtime delivers sub-second cold starts — no keep-alive strategies needed
 - Use **session continuity** to maintain context across turns
-- For latency-sensitive paths, call the **KB Retrieve API directly** and handle generation in your own service
+- For latency-sensitive paths, query **OpenSearch Serverless directly** and handle generation in your own service
 - Pre-fetch stock data for known portfolios and cache results (TTL: 24h since data is 2025 snapshot)
 
 ---

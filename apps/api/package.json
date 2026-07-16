@@ -13,6 +13,7 @@
     "db:studio": "bun --env-file=../../.env prisma studio"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "3.1028.0",
     "@elysiajs/cors": "1.3.2",
     "@ledger-book/contracts": "workspace:*",
     "@prisma/client": "6.9.0",

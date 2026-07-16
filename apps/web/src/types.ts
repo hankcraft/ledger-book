@@ -59,11 +59,19 @@ export interface Scenario {
 export type MessageRole = "user" | "agent";
 
 export type CardType =
+  | "context-summary"
   | "insight"
   | "memory-recall"
   | "evidence"
   | "scenario-comparison"
   | "confirmation-question";
+
+export interface ContextSummaryData {
+  type: "context-summary";
+  portfolio: { totalStocks: number; topHolding: string; topWeight: number };
+  marketSnapshot: string;
+  userProfile?: string;
+}
 
 export interface InsightData {
   type: "insight";
@@ -106,6 +114,7 @@ export interface ConfirmationData {
 }
 
 export type CardData =
+  | ContextSummaryData
   | InsightData
   | MemoryRecallData
   | EvidenceData

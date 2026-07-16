@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 
 import ChoiceSelector from "../components/ChoiceSelector.vue";
 import InsightFeedback from "../components/InsightFeedback.vue";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
 import ProgressIndicator from "../components/ProgressIndicator.vue";
 import StepQuestion from "../components/StepQuestion.vue";
 import StockInput from "../components/StockInput.vue";
@@ -245,6 +246,7 @@ async function handleTemplateSelect(templateId: string): Promise<void> {
               :disabled="!hasCost || isSubmittingStep"
               @click="handleCostSubmit"
             >
+              <LoadingSpinner v-if="isGeneratingInsight" :size="14" />
               {{ isGeneratingInsight ? "整理中…" : "看看分析" }}
             </button>
           </div>
@@ -254,6 +256,7 @@ async function handleTemplateSelect(templateId: string): Promise<void> {
         <template v-else-if="currentStep.type === 'final-insight'">
           <InsightFeedback :text="finalInsight" />
           <button class="primary-btn" :disabled="state.loading" @click="handleComplete">
+            <LoadingSpinner v-if="state.loading" :size="14" />
             {{ state.loading ? "建立中…" : "開始使用" }}
           </button>
         </template>
@@ -418,6 +421,10 @@ async function handleTemplateSelect(templateId: string): Promise<void> {
 }
 
 .primary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   margin-top: var(--space-6);
   padding: var(--space-3) var(--space-6);
   border-radius: var(--radius-card);

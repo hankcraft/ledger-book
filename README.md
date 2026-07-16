@@ -20,9 +20,9 @@
 | Frontend | Vue 3 + Vite | SPA，支援 ECharts 圖表 |
 | Backend API | Elysia.js + Bun | TypeScript 型別安全 REST API |
 | Database | PostgreSQL + Prisma ORM | Append-only 不可變帳本 |
-| Cache | Redis | 市場數據快取（未來） |
-| AI Agent | AWS Bedrock + AgentCore | 質化事實統整，籌碼與社群分析 |
-| Infrastructure | Terraform + AWS (CloudFront, App Runner, Aurora, S3) | 雲原生部署 |
+| AI Agent | Node.js 22 + AWS Bedrock AgentCore | OpenSearch 結構化查詢 + Nova Pro 質化分析 |
+| Search | OpenSearch Serverless | 股市結構化數據索引（8 indices） |
+| Infrastructure | Terraform + AWS (CloudFront, ECS Fargate, ALB, RDS, S3) | 雲原生部署 |
 
 ### Monorepo 結構
 
@@ -49,7 +49,7 @@
 ### 安裝與啟動
 
 ```sh
-# 1. 啟動 PostgreSQL + Redis
+# 1. 啟動 PostgreSQL
 docker compose up -d
 
 # 2. 安裝依賴
@@ -99,11 +99,12 @@ bun run db:studio     # 開啟 Prisma Studio GUI
 
 詳見 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
-部署目標為 AWS `ap-northeast-1`，架構包含：
+部署目標為 AWS `us-east-1`，架構包含：
 - CloudFront → S3（前端 SPA）
-- CloudFront → App Runner（API，含 VPC Connector 連接 Aurora）
-- Aurora PostgreSQL Serverless v2
-- OpenSearch Serverless（Agent RAG）
+- CloudFront → ALB → ECS Fargate（API，VPC 內連接 RDS）
+- RDS PostgreSQL
+- OpenSearch Serverless（Agent 結構化查詢）
+- AWS Bedrock AgentCore（Agent Runtime）
 
 ```sh
 bun run deploy:init   # 首次初始化 Terraform

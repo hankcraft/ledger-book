@@ -84,10 +84,7 @@
 | **資料庫 (Database)** | PostgreSQL + Prisma ORM | 儲存 Immutable 的交易帳本與使用者狀態 。
 
  |
-| **快取層 (Cache)** | Redis | 緩衝外部歷史報價 API 的 Rate Limit，儲存正規化後的市場數據以降低延遲 。
-
- |
-| **AI 推理 (AI Provider)** | AWS Bedrock, AgentCore, KnowledgeBase  | 執行 Prompt Engineering，專職萃取籌碼與社群數據的客觀事實，生成質化報告 。
+| **AI 推理 (AI Provider)** | AWS Bedrock (Nova Pro), AgentCore, OpenSearch Serverless  | Agent Runtime 查詢 OpenSearch 結構化數據，由 Nova Pro 生成客觀質化分析 。
 
  |
 

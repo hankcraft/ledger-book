@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 import AgentInsightCard from "../components/AgentInsightCard.vue";
 import ChatMessage from "../components/ChatMessage.vue";
 import ConfirmationQuestion from "../components/ConfirmationQuestion.vue";
+import ContextSummaryCard from "../components/ContextSummaryCard.vue";
 import EvidenceCard from "../components/EvidenceCard.vue";
 import MarkdownText from "../components/MarkdownText.vue";
 import MemoryRecall from "../components/MemoryRecall.vue";
@@ -158,6 +159,10 @@ onMounted(async () => {
             :animate="!message.id.startsWith('history-')"
           />
           <AgentInsightCard v-if="message.card?.type === 'insight'" :data="message.card" />
+          <ContextSummaryCard
+            v-if="message.card?.type === 'context-summary'"
+            :data="message.card"
+          />
           <MemoryRecall v-if="message.card?.type === 'memory-recall'" :data="message.card" />
           <EvidenceCard v-if="message.card?.type === 'evidence'" :data="message.card" />
           <ScenarioComparison

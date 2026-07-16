@@ -14,36 +14,32 @@ AWS credentials must be configured with access to account `414208189972`.
 ## Architecture
 
 ```
-┌─────────────────────── ap-northeast-1 ────────────────────────────────────┐
+┌─────────────────────────── us-east-1 ─────────────────────────────────────┐
 │                                                                            │
 │  ┌───────────────────── CloudFront ─────────────────────┐                 │
 │  │   /*  → S3 (Vue SPA)                                 │                 │
-│  │   /api/* → App Runner                                │                 │
+│  │   /api/* → ALB (ECS Fargate)                         │                 │
 │  └───────────────────────────────────────────────────────┘                │
 │                              │                                             │
 │          ┌───────────────────┼───────────────────┐                        │
 │          ▼                   ▼                   │                         │
 │  ┌──────────────┐   ┌──────────────┐            │                         │
-│  │  S3 Bucket   │   │  App Runner  │────────┐   │                         │
+│  │  S3 Bucket   │   │ ECS Fargate  │────────┐   │                         │
 │  │  (Vue SPA)   │   │  (Bun API)   │        │   │                         │
 │  └──────────────┘   └──────────────┘        │   │                         │
-│                        │  VPC Connector      │   │                         │
+│                        │  VPC / ALB          │   │                         │
 │                        ▼                     │   │                         │
 │              ┌──────────────────┐            │   │                         │
-│              │  Aurora Postgres  │            │   │                         │
-│              │  (Serverless v2)  │            │   │                         │
+│              │ Aurora Postgres   │            │   │                         │
+│              │ (Serverless v2)   │            │   │                         │
 │              └──────────────────┘            │   │                         │
 │                                              │   │                         │
 │  ┌──────────────┐                            │   │                         │
 │  │     ECR      │ ◀── Docker image           │   │                         │
 │  └──────────────┘                            │   │                         │
 │                                              │   │                         │
-└──────────────────────────────────────────────┼───┼─────────────────────────┘
-                                               │   │
-┌─────────────────────── us-east-1 ────────────┼───┼─────────────────────────┐
-│                                              ▼   │                         │
-│  ┌──────────────────────────────────┐            │                         │
-│  │  AgentCore Runtime (NODE_22)     │◀───────────┘                         │
+│  ┌──────────────────────────────────┐        │   │                         │
+│  │  AgentCore Runtime (NODE_22)     │◀───────┘   │                         │
 │  │  cmoney_stock_node               │  AGENT_ENDPOINT                      │
 │  └──────────────────────────────────┘                                      │
 │              │                                                              │
@@ -64,11 +60,11 @@ AWS credentials must be configured with access to account `414208189972`.
 
 | Component | Service | Region | Purpose |
 |-----------|---------|--------|---------|
-| Web SPA | S3 + CloudFront | ap-northeast-1 | Vue 3 static hosting with CDN |
-| API | App Runner + ECR | ap-northeast-1 | Bun/Elysia REST API |
-| Database | Aurora Serverless v2 | ap-northeast-1 | PostgreSQL 16.4 (Prisma ORM) |
+| Web SPA | S3 + CloudFront | us-east-1 | Vue 3 static hosting with CDN |
+| API | ECS Fargate + ALB + ECR | us-east-1 | Bun/Elysia REST API |
+| Database | Aurora Serverless v2 | us-east-1 | PostgreSQL 16.4 (Prisma ORM) |
 | Agent | AgentCore Runtime | us-east-1 | Stock analysis with Bedrock Nova Pro |
-| Data Store | OpenSearch Serverless | us-east-1 | CMoney stock market indices |
+| Data Store | OpenSearch Serverless | us-east-1 | CMoney stock market indices (8 indices) |
 
 ## Terraform Structure
 
@@ -79,7 +75,7 @@ infra/terraform/
 ├── outputs.tf               # Exported values
 ├── terraform.tfvars.example # Example configuration
 ├── web.tf                   # S3 + CloudFront (SPA)
-├── api.tf                   # ECR + App Runner + RDS + VPC
+├── api.tf                   # ECR + ECS Fargate + ALB + RDS + VPC
 ├── agent.tf                 # AgentCore Runtime + IAM + S3
 └── opensearch.tf            # OpenSearch Serverless collection
 ```
@@ -90,7 +86,7 @@ infra/terraform/
 
    ```bash
    aws configure
-   # Region: ap-northeast-1
+   # Region: us-east-1
    ```
 
 2. **Install dependencies:**
@@ -115,7 +111,7 @@ infra/terraform/
 
 5. **Run database migrations:**
 
-   Migrations run automatically on container start (`prisma migrate deploy`). For the first deploy, ensure the Docker image has been pushed before App Runner starts.
+   Migrations run automatically on container start (`prisma migrate deploy`). For the first deploy, ensure the Docker image has been pushed before ECS starts the task.
 
 6. **Deploy agent code:**
 
@@ -147,7 +143,7 @@ bun run deploy
 # Web frontend only
 bun run deploy:web
 
-# API only (Docker build + ECR push)
+# API only (Docker build + ECR push + ECS service update)
 bun run deploy:api
 
 # Infrastructure only (terraform apply)
@@ -173,12 +169,11 @@ bun run agent:deploy
 |----------|---------|-------------|
 | `project_name` | `ledger-book` | Resource naming prefix |
 | `environment` | `demo` | Environment tag |
-| `aws_region` | `ap-northeast-1` | Primary region (web + API) |
+| `aws_region` | `us-east-1` | AWS region for all resources |
 | `api_image_tag` | `latest` | Docker tag for API |
 | `api_port` | `3000` | API listen port |
-| `api_cpu` | `1024` | App Runner CPU (1024 = 1 vCPU) |
-| `api_memory` | `2048` | App Runner memory (MB) |
-| `agent_region` | `us-east-1` | AgentCore region |
+| `api_cpu` | `1024` | ECS task CPU (1024 = 1 vCPU) |
+| `api_memory` | `2048` | ECS task memory (MB) |
 | `agent_runtime_name` | `cmoney_stock_node` | AgentCore runtime name |
 
 ## Terraform Outputs
@@ -188,7 +183,6 @@ After `terraform apply`, these values are available:
 ```bash
 cd infra/terraform
 terraform output cloudfront_url       # Live demo URL
-terraform output api_url              # App Runner direct URL
 terraform output s3_bucket_name       # Web assets bucket
 terraform output ecr_repo_url         # Docker registry URL
 terraform output database_endpoint    # RDS cluster endpoint
@@ -203,7 +197,7 @@ terraform output opensearch_endpoint  # AOSS collection endpoint
 
 - **Engine:** Aurora PostgreSQL 16.4 (Serverless v2)
 - **Scaling:** 0.5–2 ACU (scales based on load)
-- **Access:** Private subnets only, reachable via App Runner VPC connector
+- **Access:** Private subnets only, reachable via ECS tasks in the same VPC
 - **Migrations:** Auto-applied on container start via `prisma migrate deploy`
 
 To run migrations manually:
@@ -227,7 +221,7 @@ cd infra/terraform
 terraform destroy
 ```
 
-This deletes **all** resources: CloudFront, S3, App Runner, ECR, RDS, VPC, AgentCore, and OpenSearch.
+This deletes **all** resources: CloudFront, S3, ECS, ALB, ECR, RDS, VPC, AgentCore, and OpenSearch.
 
 > **Warning:** The RDS cluster has `deletion_protection = false` and `skip_final_snapshot = true` for demo convenience. Data will be permanently lost.
 
@@ -237,13 +231,14 @@ This deletes **all** resources: CloudFront, S3, App Runner, ECR, RDS, VPC, Agent
 |---------|----------------------|-------|
 | S3 (web) | ~$0.03 | < 1 GB storage |
 | CloudFront | ~$0.00 | Free tier: 1 TB transfer |
-| App Runner | ~$3–5 | 1 vCPU, 2 GB, pauses when idle |
+| ECS Fargate | ~$5–10 | 1 vCPU, 2 GB |
+| ALB | ~$16 | Hourly charge + LCU |
 | ECR | ~$0.10 | < 1 GB image storage |
 | Aurora Serverless v2 | ~$5–15 | 0.5 ACU minimum when active |
 | OpenSearch Serverless | ~$7–10 | 2 OCU minimum (search + index) |
 | AgentCore | ~$0–2 | Pay per invocation |
 | S3 (agent code) | ~$0.01 | < 10 MB |
-| **Total** | **~$15–35/month** | At demo traffic levels |
+| **Total** | **~$35–55/month** | At demo traffic levels |
 
 ### Cost Reduction Tips
 
@@ -251,4 +246,5 @@ This deletes **all** resources: CloudFront, S3, App Runner, ECR, RDS, VPC, Agent
 - Aurora scales to 0.5 ACU when idle but doesn't pause completely
 - OpenSearch Serverless has a minimum 2 OCU charge when collection exists
 - AgentCore charges only per invocation (no idle cost)
+- ECS Fargate charges while tasks are running; set desired count to 0 when idle
 - For the cheapest demo: destroy and redeploy only when needed (~5 min)
