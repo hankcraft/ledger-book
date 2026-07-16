@@ -1,0 +1,261 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      reset_db:
+        description: "Reset database (DROP all data)"
+        required: false
+        type: boolean
+        default: false
+      skip_api:
+        description: "Skip API deploy"
+        required: false
+        type: boolean
+        default: false
+      skip_web:
+        description: "Skip Web deploy"
+        required: false
+        type: boolean
+        default: false
+      skip_agent:
+        description: "Skip Agent deploy"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: ledger-book-demo-api
+  ECS_CLUSTER: ledger-book-demo-cluster
+  ECS_SERVICE: ledger-book-demo-api
+  S3_BUCKET: ledger-book-demo-web-assets
+  CLOUDFRONT_DISTRIBUTION_ID: E1MOZ3BVHTUIMW
+  AGENT_CODE_BUCKET: bedrock-agentcore-code-414208189972-us-east-1
+  AGENT_NAME: cmoney_stock_node
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      api_changed: ${{ steps.changes.outputs.api }}
+      web_changed: ${{ steps.changes.outputs.web }}
+      agent_changed: ${{ steps.changes.outputs.agent }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --ignore-scripts
+
+      - name: Generate Prisma client
+        run: cd apps/api && bunx prisma generate
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        run: bun run build
+
+      - name: Detect changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'packages/contracts/**'
+              - 'package.json'
+              - 'bun.lock'
+            web:
+              - 'apps/web/**'
+              - 'packages/contracts/**'
+              - 'package.json'
+              - 'bun.lock'
+            agent:
+              - 'apps/agent/**'
+              - 'package.json'
+              - 'bun.lock'
+
+      - name: Upload web dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist/
+          retention-days: 1
+
+      - name: Upload agent dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-dist
+          path: apps/agent/dist/
+          retention-days: 1
+
+  reset-db:
+    runs-on: ubuntu-latest
+    needs: build
+    if: inputs.reset_db == true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Reset database via ECS task
+        run: |
+          TASK_ARN=$(aws ecs run-task \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --task-definition ${{ env.ECS_SERVICE }} \
+            --launch-type FARGATE \
+            --network-configuration "$(aws ecs describe-services \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --services ${{ env.ECS_SERVICE }} \
+              --query 'services[0].networkConfiguration' \
+              --output json)" \
+            --overrides '{
+              "containerOverrides": [{
+                "name": "api",
+                "command": ["sh", "-c", "./node_modules/.bin/prisma db execute --schema ./prisma/schema.prisma --stdin <<EOF\nDROP SCHEMA public CASCADE;\nCREATE SCHEMA public;\nGRANT ALL ON SCHEMA public TO postgres;\nGRANT ALL ON SCHEMA public TO public;\nEOF"]
+              }]
+            }' \
+            --query "tasks[0].taskArn" \
+            --output text)
+
+          echo "Waiting for DB reset task to complete..."
+          aws ecs wait tasks-stopped --cluster ${{ env.ECS_CLUSTER }} --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --tasks "$TASK_ARN" \
+            --query "tasks[0].containers[0].exitCode" \
+            --output text)
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::DB reset task failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          echo "✔ Database reset complete"
+
+  deploy-api:
+    runs-on: ubuntu-latest
+    needs: [build, reset-db]
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (needs.reset-db.result == 'success' || needs.reset-db.result == 'skipped') &&
+      (inputs.skip_api != true) &&
+      (needs.build.outputs.api_changed == 'true' || inputs.reset_db == true || github.event_name == 'workflow_dispatch')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          docker build \
+            -t $ECR_REGISTRY/${{ env.ECR_REPO }}:$IMAGE_TAG \
+            -t $ECR_REGISTRY/${{ env.ECR_REPO }}:latest \
+            -f apps/api/Dockerfile .
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO }}:latest
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --no-cli-pager
+
+          echo "Waiting for service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }}
+          echo "✔ API deployment complete"
+
+  deploy-web:
+    runs-on: ubuntu-latest
+    needs: build
+    if: |
+      (inputs.skip_web != true) &&
+      (needs.build.outputs.web_changed == 'true' || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+
+      - name: Sync to S3
+        run: aws s3 sync dist/ s3://${{ env.S3_BUCKET }}/ --delete
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*" \
+            --no-cli-pager
+          echo "✔ Web deployment complete"
+
+  deploy-agent:
+    runs-on: ubuntu-latest
+    needs: build
+    if: |
+      (inputs.skip_agent != true) &&
+      (needs.build.outputs.agent_changed == 'true' || github.event_name == 'workflow_dispatch')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download agent dist
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-dist
+          path: apps/agent/dist/
+
+      - name: Package and upload agent
+        run: |
+          cd apps/agent/dist
+          zip -r ../deployment_package.zip agent.js
+          cd ..
+          aws s3 cp deployment_package.zip \
+            s3://${{ env.AGENT_CODE_BUCKET }}/${{ env.AGENT_NAME }}/deployment_package.zip
+          echo "✔ Agent deployment complete"
