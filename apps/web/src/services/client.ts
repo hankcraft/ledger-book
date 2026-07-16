@@ -308,6 +308,20 @@ class RealContextService implements IContextService {
       patch.behaviors = (raw.behaviors as Record<string, unknown>[]).map(mapBehavior);
     return { response: res.response, updatedContext: patch };
   }
+
+  async getHoldingTrades(holdingId: string) {
+    const res = await this.fetch.request<{
+      trades: Array<{
+        id: string;
+        date: string;
+        type: "buy" | "sell";
+        quantity: number;
+        unitPrice: number;
+        amount: number;
+      }>;
+    }>("GET", `/holdings/${holdingId}/trades`);
+    return res.trades;
+  }
 }
 
 class RealHomeService implements IHomeService {
@@ -423,8 +437,23 @@ class RealAgentService implements IAgentService {
     return this.fetch.request("GET", "/conversations");
   }
 
-  async selectOption(conversationId: string, option: string): Promise<void> {
-    await this.fetch.request("POST", `/conversations/${conversationId}/select`, { option });
+  async selectOption(
+    conversationId: string,
+    option: string,
+    artifact?: { type: "principle" | "memory"; text: string },
+  ): Promise<void> {
+    await this.fetch.request("POST", `/conversations/${conversationId}/select`, {
+      option,
+      ...(artifact ? { artifact } : {}),
+    });
+  }
+
+  async getSuggestedPrompts(): Promise<string[]> {
+    const res = await this.fetch.request<{ prompts: string[] }>(
+      "GET",
+      "/conversations/suggested-prompts",
+    );
+    return res.prompts;
   }
 }
 
