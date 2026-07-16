@@ -13,7 +13,7 @@ export const COPY = {
     updated: "已更新",
     deleted: "已移除",
     onboardingComplete: "歡迎！我已經開始整理你的投資狀況。",
-    onboardingSkipped: "已跳過設定，使用範例庫存。隨時可以到「我的資料」修改。",
+    onboardingSkipped: "已跳過設定，使用範例庫存。隨時可以到「我的庫存」修改。",
   },
   loading: {
     default: "讓我看看…",

@@ -117,7 +117,7 @@ export function useAppStore() {
       applyContext(await api.context.getContext());
       state.onboardingComplete = true;
       writeOnboardingCompletion();
-      showToast("已跳過設定，使用範例庫存。隨時可以到「我的資料」修改。");
+      showToast("已跳過設定，使用範例庫存。隨時可以到「我的庫存」修改。");
     } finally {
       state.loading = false;
     }

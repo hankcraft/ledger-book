@@ -80,6 +80,8 @@ export function useQuickEntry() {
 
       resetForm();
       showToast("已新增 ✓");
+      // Signal other components (e.g. PerformancePage) to refresh
+      window.dispatchEvent(new CustomEvent("trade-created"));
       return true;
     } catch (e) {
       error.value = e instanceof Error ? e.message : "沒成功，等一下再試？";

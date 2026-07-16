@@ -271,6 +271,31 @@ class MockContextService implements IContextService {
       updatedContext: { inferences: clone(this.state.context.inferences) },
     };
   }
+
+  async getHoldingTrades(holdingId: string) {
+    await delay(200);
+    // Mock: return sample trades for demo purposes
+    const holding = this.state.context.holdings.find((h) => h.id === holdingId);
+    if (!holding) return [];
+    return [
+      {
+        id: `trade-${holdingId}-1`,
+        date: "2025-09-15",
+        type: "buy" as const,
+        quantity: 2000,
+        unitPrice: holding.cost * 0.95,
+        amount: 2000 * holding.cost * 0.95,
+      },
+      {
+        id: `trade-${holdingId}-2`,
+        date: "2025-11-02",
+        type: "buy" as const,
+        quantity: 1000,
+        unitPrice: holding.cost * 1.02,
+        amount: 1000 * holding.cost * 1.02,
+      },
+    ];
+  }
 }
 
 class MockHomeService implements IHomeService {
@@ -305,17 +330,42 @@ class MockHomeService implements IHomeService {
 interface MockConversation {
   hasInitialResponse: boolean;
   selectedOption: string | null;
+  prompt: string;
 }
 
 class MockAgentService implements IAgentService {
   private readonly conversations = new Map<string, MockConversation>();
+  private readonly history: ConversationSummary[] = [
+    {
+      id: "conv-1",
+      date: "7/12",
+      trigger: "想全部賣掉",
+      conclusion: "短期波動，你後來決定觀察 2 天",
+      artifact: { type: "principle", text: "單一個股不超過 30%" },
+    },
+    {
+      id: "conv-2",
+      date: "7/8",
+      trigger: "聯發科要不要停損",
+      conclusion: "你確認買進理由仍在，繼續持有",
+      artifact: { type: "memory", text: "覺得跌很多，大家都說會反彈" },
+    },
+    {
+      id: "conv-3",
+      date: "7/5",
+      trigger: "為什麼我比大盤跌得多",
+      conclusion: "68% 集中於 AI 題材是主因",
+      artifact: null,
+    },
+  ];
 
-  async startConversation(_prompt: string): Promise<{ conversationId: string }> {
+  async startConversation(prompt: string): Promise<{ conversationId: string }> {
     await delay(200);
     const conversationId = `conv-${Date.now()}`;
     this.conversations.set(conversationId, {
       hasInitialResponse: false,
       selectedOption: null,
+      prompt,
     });
     return { conversationId };
   }
@@ -342,6 +392,17 @@ class MockAgentService implements IAgentService {
       };
 
       yield* streamMockConversation();
+
+      // Persist to history after first response
+      const now = new Date();
+      const dateStr = `${now.getMonth() + 1}/${now.getDate()}`;
+      this.history.unshift({
+        id: conversationId,
+        date: dateStr,
+        trigger: conversation.prompt,
+        conclusion: "剛完成的對話",
+        artifact: null,
+      });
       return;
     }
 
@@ -361,6 +422,7 @@ class MockAgentService implements IAgentService {
     this.conversations.set(resumedConversationId, {
       hasInitialResponse: true,
       selectedOption: null,
+      prompt: "",
     });
     return {
       conversationId: resumedConversationId,
@@ -371,36 +433,27 @@ class MockAgentService implements IAgentService {
 
   async getPastConversations(): Promise<ConversationSummary[]> {
     await delay(200);
-    return [
-      {
-        id: "conv-1",
-        date: "7/12",
-        trigger: "想全部賣掉",
-        conclusion: "短期波動，你後來決定觀察 2 天",
-        artifact: { type: "principle", text: "單一個股不超過 30%" },
-      },
-      {
-        id: "conv-2",
-        date: "7/8",
-        trigger: "聯發科要不要停損",
-        conclusion: "你確認買進理由仍在，繼續持有",
-        artifact: { type: "memory", text: "覺得跌很多，大家都說會反彈" },
-      },
-      {
-        id: "conv-3",
-        date: "7/5",
-        trigger: "為什麼我比大盤跌得多",
-        conclusion: "68% 集中於 AI 題材是主因",
-        artifact: null,
-      },
-    ];
+    return clone(this.history);
   }
 
-  async selectOption(conversationId: string, option: string): Promise<void> {
+  async selectOption(
+    conversationId: string,
+    option: string,
+    _artifact?: { type: "principle" | "memory"; text: string },
+  ): Promise<void> {
     await delay(100);
     const conversation = this.conversations.get(conversationId);
     if (!conversation) throw new Error(`Conversation ${conversationId} not found`);
     conversation.selectedOption = option;
+  }
+
+  async getSuggestedPrompts(): Promise<string[]> {
+    await delay(150);
+    return [
+      "台積電佔比 40% 會不會太高？",
+      "聯發科虧損中，該怎麼看？",
+      "最近大盤跌，我的持倉受多少影響？",
+    ];
   }
 }
 
@@ -412,20 +465,31 @@ class MockPerformanceService implements IPerformanceService {
     const points = this.generateTimeline(30);
     this.events = new Map([
       [
-        points[5]!.date,
-        { date: points[5]!.date, type: "buy", summary: "買進台積電 2 張，均價 980 元" },
+        points[8]!.date,
+        {
+          date: points[8]!.date,
+          type: "market",
+          summary: "社群情緒：台積電 看多 85/看空 12、聯發科 看多 32/看空 28（共 420 則討論）",
+          sentiment: "bullish",
+        },
       ],
       [
-        points[12]!.date,
-        { date: points[12]!.date, type: "market", summary: "大盤單日跌幅 2.3%，AI 供應鏈全面回調" },
+        points[15]!.date,
+        {
+          date: points[15]!.date,
+          type: "dividend",
+          summary: "長榮除息，現金股利 3.5 元，殖利率 4.2%",
+          sentiment: "neutral",
+        },
       ],
       [
-        points[18]!.date,
-        { date: points[18]!.date, type: "dividend", summary: "長榮配息入帳，每股 3.5 元" },
-      ],
-      [
-        points[25]!.date,
-        { date: points[25]!.date, type: "sell", summary: "賣出聯電 1 張，獲利 3.1%" },
+        points[22]!.date,
+        {
+          date: points[22]!.date,
+          type: "market",
+          summary: "社群情緒：台積電 看多 15/看空 68、聯電 看多 8/看空 22（共 310 則討論）",
+          sentiment: "bearish",
+        },
       ],
     ]);
     this.timeline = {

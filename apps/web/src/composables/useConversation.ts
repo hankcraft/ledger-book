@@ -76,6 +76,8 @@ export function useConversation() {
       if (generation === streamGeneration) {
         isPlaying.value = false;
         isComplete.value = true;
+        // Refresh past conversations list so the new conversation appears in history
+        void loadPastConversations();
       }
     }
   }
@@ -204,6 +206,24 @@ export function useConversation() {
     }
   }
 
+  /** Save a conversation conclusion as a principle or memory in user context */
+  async function saveArtifact(artifact: {
+    type: "principle" | "memory";
+    text: string;
+  }): Promise<boolean> {
+    const conversationId = currentConversationId.value;
+    if (!conversationId) return false;
+
+    try {
+      const label = artifact.type === "principle" ? "記住原則" : "記住這段話";
+      await api.agent.selectOption(conversationId, label, artifact);
+      return true;
+    } catch {
+      error.value = "無法儲存，等一下再試？";
+      return false;
+    }
+  }
+
   return {
     messages,
     isPlaying,
@@ -218,5 +238,6 @@ export function useConversation() {
     resumeConversation,
     loadPastConversations,
     selectOption,
+    saveArtifact,
   };
 }

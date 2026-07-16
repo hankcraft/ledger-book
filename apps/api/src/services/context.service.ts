@@ -23,6 +23,10 @@ export interface ContextService {
   ): Promise<{ response: string; inferences: V1Inference[] }>;
   completeOnboarding(userId: string, data: OnboardingData): Promise<V1UserContext>;
   applyTemplate(userId: string, templateId: string): Promise<V1UserContext>;
+  /** Add a new principle from a conversation conclusion */
+  addPrinciple(userId: string, statement: string, source: string): Promise<V1Principle>;
+  /** Add a new memory from a conversation conclusion */
+  addMemory(userId: string, quote: string, source: string): Promise<V1Memory>;
 }
 
 export interface OnboardingData {
@@ -267,6 +271,14 @@ async function seedPortfolioFromTemplate(
       },
     });
   }
+
+  // Link V1Holdings to their securities via securityId
+  for (const { securityId, holding } of holdingSecurities) {
+    await db.v1Holding.updateMany({
+      where: { userId, name: holding.name, securityId: null },
+      data: { securityId },
+    });
+  }
 }
 
 /** Generate weekly date strings between start and end (inclusive of both). */
@@ -405,7 +417,20 @@ export function createContextService(db: PrismaClient): ContextService {
     async completeOnboarding(userId, data) {
       const plPercent = data.pnlStatus === "PROFIT" ? 12 : data.pnlStatus === "LOSS" ? -5 : 1;
 
-      // Upsert user's primary holding from onboarding
+      // Upsert security for the onboarded stock
+      const security = await db.security.upsert({
+        where: { market_symbol: { market: "TWSE", symbol: data.stockName } },
+        update: {},
+        create: {
+          symbol: data.stockName,
+          market: "TWSE",
+          name: data.stockName,
+          assetType: "stock",
+          currency: "TWD",
+        },
+      });
+
+      // Create holding linked to security
       await db.v1Holding.create({
         data: {
           userId,
@@ -413,6 +438,7 @@ export function createContextService(db: PrismaClient): ContextService {
           weight: data.weightPercent ?? 30,
           cost: data.cost ?? 500,
           plPercent,
+          securityId: security.id,
         },
       });
 
@@ -489,6 +515,33 @@ export function createContextService(db: PrismaClient): ContextService {
       await seedPortfolioFromTemplate(db, userId, template);
 
       return this.getContext(userId);
+    },
+
+    async addPrinciple(userId, statement, source) {
+      const row = await db.v1Principle.create({
+        data: {
+          userId,
+          statement,
+          confirmedAt: new Date().toISOString().slice(0, 10),
+          source,
+          paused: false,
+          badge: "對話結論",
+        },
+      });
+      return toPrinciple(row);
+    },
+
+    async addMemory(userId, quote, source) {
+      const row = await db.v1Memory.create({
+        data: {
+          userId,
+          quote,
+          date: new Date().toISOString().slice(0, 10),
+          source,
+          archived: false,
+        },
+      });
+      return toMemory(row);
     },
   };
 }

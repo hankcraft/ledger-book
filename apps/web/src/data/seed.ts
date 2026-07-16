@@ -9,31 +9,31 @@ import type {
 } from "../types";
 
 export const seedHoldings: Holding[] = [
-  { id: "h1", name: "台積電", weight: 40, cost: 980, plPercent: 12, purchaseDate: "2026-04-01" },
-  { id: "h2", name: "聯發科", weight: 28, cost: 1280, plPercent: -5, purchaseDate: "2026-05-15" },
-  { id: "h3", name: "長榮", weight: 20, cost: 168, plPercent: 8, purchaseDate: "2026-03-20" },
-  { id: "h4", name: "聯電", weight: 12, cost: 52, plPercent: 3, purchaseDate: "2026-06-10" },
+  { id: "h1", name: "台積電", weight: 40, cost: 980, plPercent: 12, purchaseDate: "2025-04-01" },
+  { id: "h2", name: "聯發科", weight: 28, cost: 1280, plPercent: -5, purchaseDate: "2025-05-15" },
+  { id: "h3", name: "長榮", weight: 20, cost: 168, plPercent: 8, purchaseDate: "2025-03-20" },
+  { id: "h4", name: "聯電", weight: 12, cost: 52, plPercent: 3, purchaseDate: "2025-06-10" },
 ];
 
 export const seedPrinciples: Principle[] = [
   {
     id: "p1",
     statement: "單一個股不超過 30%",
-    confirmedAt: "2026-07-10",
+    confirmedAt: "2025-12-10",
     source: "集中度超標",
     paused: false,
   },
   {
     id: "p2",
     statement: "科技股集中是我刻意的",
-    confirmedAt: "2026-07-08",
+    confirmedAt: "2025-12-08",
     source: "產業配置",
     paused: false,
   },
   {
     id: "p3",
     statement: "以長期持有為主",
-    confirmedAt: "2026-07-05",
+    confirmedAt: "2025-12-05",
     source: "投資風格",
     paused: false,
   },
@@ -43,35 +43,35 @@ export const seedMemories: Memory[] = [
   {
     id: "m1",
     quote: "其實最難受的是不知道發生什麼，不一定是真的想賣",
-    date: "2026-07-05",
+    date: "2025-12-05",
     source: "台積電下跌",
     archived: false,
   },
   {
     id: "m2",
     quote: "覺得跌很多，大家都說會反彈",
-    date: "2026-06-28",
+    date: "2025-11-28",
     source: "買進聯發科",
     archived: false,
   },
   {
     id: "m3",
     quote: "我不太看技術分析，主要看公司基本面",
-    date: "2026-06-20",
+    date: "2025-11-20",
     source: "投資方法",
     archived: false,
   },
   {
     id: "m4",
     quote: "最近工作很忙，沒時間看盤",
-    date: "2026-07-12",
+    date: "2025-12-12",
     source: "使用頻率下降",
     archived: false,
   },
   {
     id: "m5",
     quote: "電動車我不太懂，不想碰",
-    date: "2026-06-15",
+    date: "2025-11-15",
     source: "選股範圍",
     archived: false,
   },
@@ -205,7 +205,7 @@ export const conversationScript: ConversationStep[] = [
     role: "agent",
     card: {
       type: "memory-recall",
-      date: "2026-07-05",
+      date: "2025-12-05",
       context: "上次你也是在單日跌幅超過 2.5% 時表示想離場",
       quote: "其實最難受的是不知道發生什麼，不一定是真的想賣。",
     },

@@ -8,6 +8,7 @@ import { createPortfolioService } from "./services/portfolio.service.ts";
 import { createTimeTravelService } from "./services/time-travel.service.ts";
 import { createContextService } from "./services/context.service.ts";
 import { createConversationService } from "./services/conversation.service.ts";
+import { createOpenSearchService } from "./services/opensearch.service.ts";
 
 import { healthRoutes } from "./routes/health.ts";
 import { createDemoImportRoutes } from "./routes/demo-imports.ts";
@@ -19,6 +20,7 @@ import { createContextRoutes } from "./routes/v1/context.ts";
 import { createHomeRoutes } from "./routes/v1/home.ts";
 import { createPerformanceRoutes } from "./routes/v1/performance.ts";
 import { createConversationRoutes } from "./routes/v1/conversations.ts";
+import { createHoldingsRoutes } from "./routes/v1/holdings.ts";
 
 export interface AppConfig {
   db: PrismaClient;
@@ -44,6 +46,7 @@ export function createApp(config: AppConfig) {
   const timeTravelService = createTimeTravelService(db);
   const contextService = createContextService(db);
   const conversationService = createConversationService(db);
+  const openSearchService = createOpenSearchService();
 
   // For V1 performance route
   const getPortfolioId = () => defaultPortfolioId;
@@ -59,6 +62,7 @@ export function createApp(config: AppConfig) {
     .use(createOnboardingRoutes(contextService, getUserId))
     .use(createContextRoutes(contextService, getUserId))
     .use(createHomeRoutes(contextService, getUserId))
-    .use(createPerformanceRoutes(portfolioService, getPortfolioId, db))
-    .use(createConversationRoutes(conversationService, contextService, getUserId));
+    .use(createPerformanceRoutes(portfolioService, getPortfolioId, db, openSearchService))
+    .use(createConversationRoutes(conversationService, contextService, getUserId))
+    .use(createHoldingsRoutes(db, getUserId));
 }

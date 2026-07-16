@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import type { ContextService } from "../../services/context.service.ts";
-import { invokeAgent, buildPortfolioContext } from "../../agent-client.ts";
+import { invokeAgent, buildPortfolioContext, extractFollowUpOptions } from "../../agent-client.ts";
 
 export function createHomeRoutes(contextService: ContextService, getUserId: () => string) {
   return new Elysia({ name: "routes:v1:home", prefix: "/api/v1/home" })
@@ -54,7 +54,8 @@ export function createHomeRoutes(contextService: ContextService, getUserId: () =
           "根據這位投資者的持股組合，用一句話（50字內）指出目前最值得注意的一件事。不要給投資建議，只陳述觀察。";
         const agentInsight = await invokeAgent({ prompt, portfolioContext, timeout: 15_000 });
         if (agentInsight && agentInsight.length > 5) {
-          scenario.insight = agentInsight;
+          const { text } = extractFollowUpOptions(agentInsight);
+          scenario.insight = text || agentInsight;
         }
       } catch (err) {
         console.log(

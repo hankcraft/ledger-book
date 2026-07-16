@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import AgentInsightCard from "../components/AgentInsightCard.vue";
+import ArtifactSaveCard from "../components/ArtifactSaveCard.vue";
 import ChatMessage from "../components/ChatMessage.vue";
 import ConfirmationQuestion from "../components/ConfirmationQuestion.vue";
 import ContextSummaryCard from "../components/ContextSummaryCard.vue";
@@ -13,9 +14,11 @@ import PageHeader from "../components/PageHeader.vue";
 import PastConversations from "../components/PastConversations.vue";
 import ScenarioComparison from "../components/ScenarioComparison.vue";
 import { useConversation } from "../composables/useConversation";
+import { useApi } from "../services";
 
 const route = useRoute();
 const router = useRouter();
+const api = useApi();
 const {
   messages,
   isPlaying,
@@ -27,12 +30,17 @@ const {
   resumeConversation,
   loadPastConversations,
   selectOption,
+  saveArtifact,
 } = useConversation();
 
 const userInput = ref("");
 const historyExpanded = ref(false);
 const selectedOption = ref<string | null>(null);
-const suggestedPills = ["今天有什麼值得注意的？", "上次我們聊到哪？", "最近的操作有什麼趨勢？"];
+const suggestedPills = ref([
+  "今天有什麼值得注意的？",
+  "上次我們聊到哪？",
+  "最近的操作有什麼趨勢？",
+]);
 
 const isEmpty = computed(() => messages.value.length === 0 && !isPlaying.value);
 
@@ -68,8 +76,25 @@ async function handleSelectOption(option: string): Promise<void> {
   }
 }
 
+async function handleSaveArtifact(artifact: {
+  type: "principle" | "memory";
+  text: string;
+}): Promise<void> {
+  await saveArtifact(artifact);
+}
+
 onMounted(async () => {
   void loadPastConversations();
+
+  // Load context-aware suggested prompts
+  api.agent
+    .getSuggestedPrompts()
+    .then((prompts) => {
+      if (prompts.length > 0) suggestedPills.value = prompts;
+    })
+    .catch(() => {
+      /* keep defaults */
+    });
 
   // Only auto-start if navigated with a prompt query (e.g. from HomePage action)
   const prompt = typeof route.query.prompt === "string" ? route.query.prompt : null;
@@ -175,6 +200,12 @@ onMounted(async () => {
             :disabled="isPlaying"
             :selected-option="selectedOption"
             @select="handleSelectOption"
+          />
+          <ArtifactSaveCard
+            v-if="message.card?.type === 'artifact-save'"
+            :data="message.card"
+            :disabled="isPlaying"
+            @save="handleSaveArtifact"
           />
         </ChatMessage>
 

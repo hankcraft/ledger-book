@@ -28,7 +28,7 @@ function handleLogout(): void {
 
 <template>
   <main class="my-data">
-    <PageHeader title="我的資料" />
+    <PageHeader title="我的庫存" />
 
     <!-- Holdings -->
     <section class="section">

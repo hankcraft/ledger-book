@@ -51,6 +51,7 @@ function createConversationApi(options: ConversationApiOptions = {}): IApiServic
     togglePrinciple: async () => {
       throw new Error("not used");
     },
+    getHoldingTrades: async () => [],
   };
 
   const home: IHomeService = {
@@ -82,6 +83,7 @@ function createConversationApi(options: ConversationApiOptions = {}): IApiServic
       yield { id: `agent-reply-${streamAttempts}`, role: "agent", text: "已繼續整理。" };
     },
     startConversation: async () => ({ conversationId: "conversation-1" }),
+    getSuggestedPrompts: async () => ["test prompt 1", "test prompt 2", "test prompt 3"],
   };
 
   return {

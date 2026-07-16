@@ -72,6 +72,8 @@ export interface IContextService {
   submitCorrection(
     text: string,
   ): Promise<{ response: string; updatedContext: Partial<UserContext> }>;
+  /** Get trade history for a specific holding */
+  getHoldingTrades(holdingId: string): Promise<HoldingTrade[]>;
 }
 
 // ─── Home (Scenarios) ─────────────────────────────────────────
@@ -113,7 +115,13 @@ export interface IAgentService {
   /** Get past conversation summaries */
   getPastConversations(): Promise<ConversationSummary[]>;
   /** User selected a confirmation option */
-  selectOption(conversationId: string, option: string): Promise<void>;
+  selectOption(
+    conversationId: string,
+    option: string,
+    artifact?: { type: "principle" | "memory"; text: string },
+  ): Promise<void>;
+  /** Get suggested prompts based on user context */
+  getSuggestedPrompts(): Promise<string[]>;
 }
 
 // ─── Performance ──────────────────────────────────────────────
@@ -140,6 +148,15 @@ export interface PerformanceTimeline {
 export interface TradeDetail {
   name: string;
   symbol: string;
+  type: "buy" | "sell";
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+export interface HoldingTrade {
+  id: string;
+  date: string;
   type: "buy" | "sell";
   quantity: number;
   unitPrice: number;

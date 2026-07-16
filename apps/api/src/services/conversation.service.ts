@@ -9,6 +9,11 @@ export interface ConversationService {
   saveMessage(conversationId: string, message: SaveMessageInput): Promise<void>;
   markResponded(conversationId: string): Promise<void>;
   selectOption(conversationId: string, option: string): Promise<boolean>;
+  saveConclusion(
+    conversationId: string,
+    conclusion: string,
+    artifact?: { type: "principle" | "memory"; text: string },
+  ): Promise<void>;
   resumeConversation(
     userId: string,
     originalId: string,
@@ -145,6 +150,17 @@ export function createConversationService(db: PrismaClient): ConversationService
         data: { selectedOption: option },
       });
       return true;
+    },
+
+    async saveConclusion(conversationId, conclusion, artifact) {
+      await db.v1Conversation.update({
+        where: { id: conversationId },
+        data: {
+          conclusion,
+          artifactType: artifact?.type ?? null,
+          artifactText: artifact?.text ?? null,
+        },
+      });
     },
 
     async resumeConversation(userId, originalId) {
