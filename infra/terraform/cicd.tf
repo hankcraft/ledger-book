@@ -36,7 +36,8 @@ resource "aws_iam_role" "github_actions_deploy" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:*"
+          # GitHub OIDC sub format includes numeric IDs: repo:OWNER@ID/REPO@ID:ref:...
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository_owner}@*/${var.github_repository_name}@*:*"
         }
       }
     }]
