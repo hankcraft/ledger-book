@@ -6,6 +6,8 @@ import ActionOptions from "../components/ActionOptions.vue";
 import AttentionItem from "../components/AttentionItem.vue";
 import ContextualInsight from "../components/ContextualInsight.vue";
 import DailyPerformanceBanner from "../components/DailyPerformanceBanner.vue";
+import HomePageSkeleton from "../components/HomePageSkeleton.vue";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PageHeader from "../components/PageHeader.vue";
 import { BRAND } from "../constants/brand";
 import { useApi } from "../services";
@@ -70,6 +72,7 @@ let cachedPerformance: DP | null = null;
     <PageHeader :title="BRAND.appName">
       <template #action>
         <button class="header-action-btn" :disabled="loading" @click="loadData">
+          <LoadingSpinner v-if="loading" :size="14" />
           {{ loading ? "整理中…" : "換個角度看" }}
         </button>
       </template>
@@ -83,28 +86,32 @@ let cachedPerformance: DP | null = null;
 
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
 
-    <template v-else-if="scenario">
-      <section class="greeting">
-        <p>{{ scenario.greeting }}</p>
-      </section>
+    <Transition name="content-fade" mode="out-in">
+      <template v-if="scenario">
+        <div class="home-content">
+          <section class="greeting">
+            <p>{{ scenario.greeting }}</p>
+          </section>
 
-      <ContextualInsight :insight="scenario.insight" />
+          <ContextualInsight :insight="scenario.insight" />
 
-      <section
-        v-if="scenario.attentionItems.length > 0"
-        class="attention-section"
-        aria-label="注意事項"
-      >
-        <h2 class="section-label">需要留意</h2>
-        <div class="attention-list">
-          <AttentionItem v-for="item in scenario.attentionItems" :key="item.id" :item="item" />
+          <section
+            v-if="scenario.attentionItems.length > 0"
+            class="attention-section"
+            aria-label="注意事項"
+          >
+            <h2 class="section-label">需要留意</h2>
+            <div class="attention-list">
+              <AttentionItem v-for="item in scenario.attentionItems" :key="item.id" :item="item" />
+            </div>
+          </section>
+
+          <ActionOptions :actions="scenario.actions" @select="handleAction" />
         </div>
-      </section>
+      </template>
+    </Transition>
 
-      <ActionOptions :actions="scenario.actions" @select="handleAction" />
-    </template>
-
-    <p v-else-if="loading" class="loading-message">讓我看看今天的狀況…</p>
+    <HomePageSkeleton v-if="loading && !scenario" />
   </main>
 </template>
 
@@ -118,6 +125,9 @@ let cachedPerformance: DP | null = null;
 }
 
 .header-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--text-caption);
   color: var(--muted);
   padding: var(--space-2) var(--space-3);
@@ -133,8 +143,13 @@ let cachedPerformance: DP | null = null;
   color: var(--action-primary);
 }
 
-.greeting p,
-.loading-message {
+.home-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.greeting p {
   margin: 0;
   color: var(--muted);
   line-height: var(--leading-relaxed);
@@ -168,5 +183,14 @@ let cachedPerformance: DP | null = null;
   background: var(--negative-subtle);
   color: var(--negative);
   font-size: var(--text-caption);
+}
+
+/* Content fade-in transition */
+.content-fade-enter-active {
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+
+.content-fade-enter-from {
+  opacity: 0;
 }
 </style>

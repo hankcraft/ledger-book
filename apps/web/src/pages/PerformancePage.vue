@@ -4,6 +4,7 @@ import { Plus } from "lucide-vue-next";
 
 import PageHeader from "../components/PageHeader.vue";
 import PerformanceChart from "../components/PerformanceChart.vue";
+import PerformancePageSkeleton from "../components/PerformancePageSkeleton.vue";
 import TimePointDetail from "../components/TimePointDetail.vue";
 import { useApi } from "../services";
 import type { PerformanceTimeline, TimePointEvent } from "../services/types";
@@ -111,79 +112,81 @@ onMounted(() => {
 
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
 
-    <template v-else-if="timeline">
-      <!-- Metrics cards -->
-      <div class="metrics-strip">
-        <div class="metric-card">
-          <span
-            class="metric-value"
-            :class="{ positive: timeline.metrics.xirr >= 0, negative: timeline.metrics.xirr < 0 }"
-          >
-            {{ formatPercent(timeline.metrics.xirr) }}
-          </span>
-          <span class="metric-label">真實年化報酬</span>
-        </div>
-        <div class="metric-card">
-          <span
-            class="metric-value"
-            :class="{ positive: timeline.metrics.twr >= 0, negative: timeline.metrics.twr < 0 }"
-          >
-            {{ formatPercent(timeline.metrics.twr) }}
-          </span>
-          <span class="metric-label">選股能力</span>
-        </div>
-        <div class="metric-card">
-          <span class="metric-value muted-value">
-            {{ formatPercent(timeline.metrics.benchmarkReturn) }}
-          </span>
-          <span class="metric-label">同期大盤</span>
-        </div>
-      </div>
-
-      <!-- Chart -->
-      <section class="chart-section">
-        <PerformanceChart
-          :points="timeline.points"
-          :selected-date="selectedDate"
-          :event-dates="timeline.eventDates"
-          @select-point="handleSelectPoint"
-        />
-        <div class="chart-legend">
-          <span class="legend-item legend-portfolio">我的投組</span>
-          <span class="legend-item legend-benchmark">大盤 (0050)</span>
-          <span class="legend-item legend-event">有事件</span>
-        </div>
-      </section>
-
-      <!-- Selected event detail -->
-      <TimePointDetail v-if="selectedEvent" :event="selectedEvent" />
-
-      <!-- Event list -->
-      <section v-if="hasEvents" class="event-list" aria-label="近期事件">
-        <h2 class="event-list-title">近期事件</h2>
-        <ul class="events">
-          <li
-            v-for="event in events"
-            :key="event.date"
-            class="event-item"
-            :class="{ active: selectedDate === event.date }"
-            @click="handleSelectPoint(event.date)"
-          >
-            <span class="event-date">{{ formatDate(event.date) }}</span>
-            <span class="event-type" :class="eventTypeClass[event.type]">
-              {{ eventTypeLabel[event.type] }}
+    <Transition name="content-fade" mode="out-in">
+      <div v-if="timeline" class="perf-content">
+        <!-- Metrics cards -->
+        <div class="metrics-strip">
+          <div class="metric-card">
+            <span
+              class="metric-value"
+              :class="{ positive: timeline.metrics.xirr >= 0, negative: timeline.metrics.xirr < 0 }"
+            >
+              {{ formatPercent(timeline.metrics.xirr) }}
             </span>
-            <span class="event-summary">{{ event.summary }}</span>
-          </li>
-        </ul>
-      </section>
+            <span class="metric-label">真實年化報酬</span>
+          </div>
+          <div class="metric-card">
+            <span
+              class="metric-value"
+              :class="{ positive: timeline.metrics.twr >= 0, negative: timeline.metrics.twr < 0 }"
+            >
+              {{ formatPercent(timeline.metrics.twr) }}
+            </span>
+            <span class="metric-label">選股能力</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value muted-value">
+              {{ formatPercent(timeline.metrics.benchmarkReturn) }}
+            </span>
+            <span class="metric-label">同期大盤</span>
+          </div>
+        </div>
 
-      <p v-else-if="!selectedEvent && !selectedDate" class="hint">
-        點擊圖表上的亮點，查看當天發生了什麼。
-      </p>
-    </template>
+        <!-- Chart -->
+        <section class="chart-section">
+          <PerformanceChart
+            :points="timeline.points"
+            :selected-date="selectedDate"
+            :event-dates="timeline.eventDates"
+            @select-point="handleSelectPoint"
+          />
+          <div class="chart-legend">
+            <span class="legend-item legend-portfolio">我的投組</span>
+            <span class="legend-item legend-benchmark">大盤 (0050)</span>
+            <span class="legend-item legend-event">有事件</span>
+          </div>
+        </section>
 
-    <p v-else-if="loading" class="loading-message">讓我整理你的績效…</p>
+        <!-- Selected event detail -->
+        <TimePointDetail v-if="selectedEvent" :event="selectedEvent" />
+
+        <!-- Event list -->
+        <section v-if="hasEvents" class="event-list" aria-label="近期事件">
+          <h2 class="event-list-title">近期事件</h2>
+          <ul class="events">
+            <li
+              v-for="event in events"
+              :key="event.date"
+              class="event-item"
+              :class="{ active: selectedDate === event.date }"
+              @click="handleSelectPoint(event.date)"
+            >
+              <span class="event-date">{{ formatDate(event.date) }}</span>
+              <span class="event-type" :class="eventTypeClass[event.type]">
+                {{ eventTypeLabel[event.type] }}
+              </span>
+              <span class="event-summary">{{ event.summary }}</span>
+            </li>
+          </ul>
+        </section>
+
+        <p v-else-if="!selectedEvent && !selectedDate" class="hint">
+          點擊圖表上的亮點，查看當天發生了什麼。
+        </p>
+      </div>
+    </Transition>
+
+    <PerformancePageSkeleton v-if="loading && !timeline" />
   </main>
 </template>
 
@@ -418,8 +421,7 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.hint,
-.loading-message {
+.hint {
   text-align: center;
   color: var(--muted);
   font-size: var(--text-caption);
@@ -433,5 +435,20 @@ onMounted(() => {
   background: var(--negative-subtle);
   color: var(--negative);
   font-size: var(--text-caption);
+}
+
+/* ─── Content wrapper & transition ─── */
+.perf-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.content-fade-enter-active {
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+
+.content-fade-enter-from {
+  opacity: 0;
 }
 </style>
