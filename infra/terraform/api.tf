@@ -278,6 +278,37 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# --- ECS Task Role (for application-level AWS API calls) ----------------------
+
+resource "aws_iam_role" "ecs_task" {
+  name = "${local.name_prefix}-ecs-task"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-ecs-task" })
+}
+
+resource "aws_iam_role_policy" "ecs_task_agentcore" {
+  name = "invoke-agentcore"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["bedrock-agentcore:InvokeAgentRuntime"]
+      Resource = [aws_bedrockagentcore_agent_runtime.stock_agent.agent_runtime_arn]
+    }]
+  })
+}
+
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${local.name_prefix}-api"
   retention_in_days = 7
@@ -292,6 +323,7 @@ resource "aws_ecs_task_definition" "api" {
   cpu                      = var.api_cpu
   memory                   = var.api_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([
     {
@@ -305,7 +337,9 @@ resource "aws_ecs_task_definition" "api" {
         { name = "PORT", value = tostring(var.api_port) },
         { name = "NODE_ENV", value = "production" },
         { name = "DATABASE_URL", value = "postgresql://${aws_rds_cluster.main.master_username}:${random_password.db.result}@${aws_rds_cluster.main.endpoint}:5432/${aws_rds_cluster.main.database_name}?schema=public" },
-        { name = "AGENT_ENDPOINT", value = "https://${aws_bedrockagentcore_agent_runtime_endpoint.stock_agent.agent_runtime_endpoint_arn}" },
+        { name = "AGENT_RUNTIME_ARN", value = aws_bedrockagentcore_agent_runtime.stock_agent.agent_runtime_arn },
+        { name = "AGENT_ENDPOINT_QUALIFIER", value = aws_bedrockagentcore_agent_runtime_endpoint.stock_agent.name },
+        { name = "AWS_REGION", value = var.aws_region },
       ]
       logConfiguration = {
         logDriver = "awslogs"
