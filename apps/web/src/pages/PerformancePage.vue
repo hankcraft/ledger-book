@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { Plus } from "lucide-vue-next";
 
 import PageHeader from "../components/PageHeader.vue";
@@ -35,7 +35,9 @@ async function loadTimeline(): Promise<void> {
       const loaded = await Promise.all(
         eventDates.map((date) => api.performance.getTimePointEvent(date)),
       );
-      events.value = loaded.filter((e): e is TimePointEvent => e !== null);
+      events.value = loaded.filter(
+        (e): e is TimePointEvent => e !== null && e.type !== "buy" && e.type !== "sell",
+      );
     }
   } catch {
     // Event loading failed silently — chart still works
@@ -64,20 +66,24 @@ function formatPercent(value: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  // Handle YYYY-MM-DD, YYYY/MM/DD, or yyyyMMdd formats
+  const normalized = dateStr.replace(/\//g, "-");
+  const parts =
+    normalized.length === 8 && !normalized.includes("-")
+      ? [normalized.slice(4, 6), normalized.slice(6, 8)]
+      : normalized.split("-").slice(1);
+  const month = Number(parts[0]);
+  const day = Number(parts[1]);
+  if (!month || !day) return dateStr;
+  return `${month}/${day}`;
 }
 
 const eventTypeLabel: Record<string, string> = {
-  buy: "買進",
-  sell: "賣出",
-  dividend: "配息",
-  market: "市場",
+  dividend: "除權息",
+  market: "社群情緒",
 };
 
 const eventTypeClass: Record<string, string> = {
-  buy: "type-buy",
-  sell: "type-sell",
   dividend: "type-dividend",
   market: "type-market",
 };
@@ -87,7 +93,16 @@ const hasMissingDates = computed(() => timeline.value?.missingDates ?? false);
 
 onMounted(() => {
   void loadTimeline();
+  window.addEventListener("trade-created", handleTradeCreated);
 });
+
+onUnmounted(() => {
+  window.removeEventListener("trade-created", handleTradeCreated);
+});
+
+function handleTradeCreated(): void {
+  void loadTimeline();
+}
 </script>
 
 <template>
@@ -389,16 +404,6 @@ onMounted(() => {
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   white-space: nowrap;
-}
-
-.type-buy {
-  background: var(--positive-subtle);
-  color: var(--positive);
-}
-
-.type-sell {
-  background: var(--negative-subtle);
-  color: var(--negative);
 }
 
 .type-dividend {

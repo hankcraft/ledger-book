@@ -1,11 +1,13 @@
 import { Elysia } from "elysia";
 import type { PrismaClient } from "@prisma/client";
 import type { PortfolioService } from "../../services/portfolio.service.ts";
+import type { OpenSearchService } from "../../services/opensearch.service.ts";
 
 export function createPerformanceRoutes(
   portfolioService: PortfolioService,
   getPortfolioId: () => string,
   db?: PrismaClient,
+  openSearch?: OpenSearchService,
 ) {
   return new Elysia({ name: "routes:v1:performance", prefix: "/api/v1/performance" })
     .get("/timeline", async () => {
@@ -13,22 +15,11 @@ export function createPerformanceRoutes(
       const today = new Date().toISOString().slice(0, 10);
       const dashboard = await portfolioService.getDashboard(portfolioId, today);
 
-      // Gather event dates from ledger entries (buy/sell only)
+      // ─── Collect event dates from social sentiment + dividend (NOT buy/sell) ───
       let eventDates: string[] = [];
       let missingDates = false;
 
       if (db) {
-        const entries = await db.ledgerEntry.findMany({
-          where: {
-            portfolioId,
-            entryType: { in: ["buy", "sell"] },
-          },
-          select: { occurredOn: true },
-          distinct: ["occurredOn"],
-          orderBy: { occurredOn: "asc" },
-        });
-        eventDates = entries.map((e) => e.occurredOn);
-
         // Check if any V1 holdings lack purchaseDate
         const holdingsWithoutDate = await db.v1Holding.count({
           where: {
@@ -39,15 +30,84 @@ export function createPerformanceRoutes(
         missingDates = holdingsWithoutDate > 0;
       }
 
-      // If we have real dashboard data, use it
+      // Get user's held stock codes for event queries
+      const heldStockCodes = await getHeldStockCodes(portfolioId, db);
+
+      // Gather event dates from OpenSearch: dividend ex-dates and notable sentiment days
+      if (openSearch?.isAvailable() && heldStockCodes.length > 0) {
+        const dividendEvents = await openSearch.getDividendEvents(heldStockCodes);
+        const dividendDates = dividendEvents
+          .map((d) => d.exDividendDate)
+          .filter((d) => d.length > 0);
+        eventDates.push(...dividendDates);
+
+        // Get sentiment events: days with significant bullish/bearish activity
+        if (dashboard?.state === "ready" && dashboard.timelinePoints.length > 0) {
+          const firstDate = dashboard.timelinePoints[0]!.date;
+          const lastDate = dashboard.timelinePoints.at(-1)!.date;
+          const forumData = await openSearch.getForumSentimentRange(
+            heldStockCodes,
+            firstDate,
+            lastDate,
+          );
+          // Mark dates with notable sentiment (high bullish or bearish ratio)
+          const sentimentDates = forumData
+            .filter((f) => {
+              const total = f.bullishPosts + f.bearishPosts + f.neutralPosts;
+              if (total < 5) return false;
+              const ratio = Math.max(f.bullishPosts, f.bearishPosts) / total;
+              return ratio > 0.4; // Notable sentiment when > 40% lean one direction
+            })
+            .map((f) => f.date);
+          // Deduplicate and limit to avoid too many event markers
+          const uniqueSentimentDates = [...new Set(sentimentDates)].slice(0, 10);
+          eventDates.push(...uniqueSentimentDates);
+        }
+      }
+
+      // Deduplicate and sort
+      eventDates = [...new Set(eventDates)].toSorted();
+
+      // ─── Build timeline with benchmark from OpenSearch ───
       if (dashboard?.state === "ready" && dashboard.timelinePoints.length > 0) {
         const first = dashboard.timelinePoints[0]!;
+        const firstDate = first.date;
+        const lastDate = dashboard.timelinePoints.at(-1)!.date;
+
+        // Try to get benchmark from OpenSearch (0050 prices)
+        let benchmarkPoints: Map<string, number> | null = null;
+        if (openSearch?.isAvailable()) {
+          const osBenchmark = await openSearch.getBenchmarkPrices(firstDate, lastDate);
+          if (osBenchmark.length > 0) {
+            const firstBenchmarkPrice = osBenchmark[0]!.closePrice;
+            benchmarkPoints = new Map(
+              osBenchmark.map((p) => [
+                p.date,
+                Math.round((p.closePrice / firstBenchmarkPrice - 1) * 100 * 100) / 100,
+              ]),
+            );
+          }
+        }
+
         const points = dashboard.timelinePoints.map((p) => ({
           date: p.date,
           portfolioReturn: Math.round((p.marketValue / first.marketValue - 1) * 100 * 100) / 100,
           benchmarkReturn:
+            benchmarkPoints?.get(p.date) ??
             Math.round((p.benchmarkValue / first.benchmarkValue - 1) * 100 * 100) / 100,
         }));
+
+        // Calculate overall benchmark return from OpenSearch if available
+        let benchmarkReturn = dashboard.metrics.benchmarkReturn
+          ? Math.round(Number(dashboard.metrics.benchmarkReturn) * 1000) / 10
+          : 0;
+        if (benchmarkPoints && benchmarkPoints.size > 0) {
+          const lastBenchmarkReturn = [...benchmarkPoints.values()].at(-1);
+          if (lastBenchmarkReturn !== undefined) {
+            benchmarkReturn = lastBenchmarkReturn;
+          }
+        }
+
         return {
           points,
           metrics: {
@@ -55,9 +115,7 @@ export function createPerformanceRoutes(
               ? Math.round(Number(dashboard.metrics.xirr) * 1000) / 10
               : 0,
             twr: dashboard.metrics.twr ? Math.round(Number(dashboard.metrics.twr) * 1000) / 10 : 0,
-            benchmarkReturn: dashboard.metrics.benchmarkReturn
-              ? Math.round(Number(dashboard.metrics.benchmarkReturn) * 1000) / 10
-              : 0,
+            benchmarkReturn,
           },
           eventDates,
           missingDates,
@@ -73,47 +131,47 @@ export function createPerformanceRoutes(
       };
     })
     .get("/events/:date", async ({ params }) => {
-      if (!db) return null;
-
       const portfolioId = getPortfolioId();
-      const entries = await db.ledgerEntry.findMany({
-        where: {
-          portfolioId,
-          occurredOn: params.date,
-          entryType: { in: ["buy", "sell"] },
-        },
-        include: { security: { select: { name: true, symbol: true } } },
-        orderBy: { sequence: "asc" },
-      });
+      const heldStockCodes = await getHeldStockCodes(portfolioId, db);
 
-      if (entries.length === 0) return null;
+      if (!openSearch?.isAvailable() || heldStockCodes.length === 0) return null;
 
-      const trades = entries.map((e) => ({
-        name: e.security?.name ?? "未知",
-        symbol: e.security?.symbol ?? "",
-        type: e.entryType as "buy" | "sell",
-        quantity: Number(e.quantity ?? 0),
-        unitPrice: Number(e.unitPrice ?? 0),
-        amount: Math.abs(Number(e.grossCashAmount)),
-      }));
+      // Check if this date is a dividend ex-date
+      const dividendEvents = await openSearch.getDividendEvents(heldStockCodes);
+      const dividendOnDate = dividendEvents.find((d) => d.exDividendDate === params.date);
 
-      // Derive a simple sentiment from the trade pattern
-      const buyCount = trades.filter((t) => t.type === "buy").length;
-      const sellCount = trades.filter((t) => t.type === "sell").length;
+      if (dividendOnDate) {
+        return {
+          date: params.date,
+          type: "dividend",
+          summary: `${dividendOnDate.stockName} 除息，現金股利 ${dividendOnDate.cashDividend} 元，殖利率 ${dividendOnDate.yieldPercent}%`,
+          sentiment: "neutral" as const,
+        };
+      }
+
+      // Otherwise return social sentiment for that date
+      const forumData = await openSearch.getForumSentiment(heldStockCodes, params.date);
+      if (forumData.length === 0) return null;
+
+      // Aggregate sentiment across held stocks
+      const totalBullish = forumData.reduce((sum, f) => sum + f.bullishPosts, 0);
+      const totalBearish = forumData.reduce((sum, f) => sum + f.bearishPosts, 0);
+      const totalPosts = forumData.reduce((sum, f) => sum + f.postCount, 0);
+
       let sentiment: "bullish" | "bearish" | "neutral" = "neutral";
-      if (buyCount > 0 && sellCount === 0) sentiment = "bullish";
-      else if (sellCount > 0 && buyCount === 0) sentiment = "bearish";
+      if (totalBullish > totalBearish * 2) sentiment = "bullish";
+      else if (totalBearish > totalBullish * 2) sentiment = "bearish";
 
-      const summaryParts = trades.map(
-        (t) => `${t.type === "buy" ? "買" : "賣"} ${t.name} ${t.quantity}股 @${t.unitPrice}`,
-      );
+      const summaryParts = forumData
+        .toSorted((a, b) => b.postCount - a.postCount)
+        .slice(0, 3)
+        .map((f) => `${f.stockName} 看多${f.bullishPosts}/看空${f.bearishPosts}`);
 
       return {
         date: params.date,
-        type: buyCount >= sellCount ? "buy" : "sell",
-        summary: summaryParts.join("、"),
+        type: "market",
+        summary: `社群情緒：${summaryParts.join("、")}（共 ${totalPosts} 則討論）`,
         sentiment,
-        trades,
       };
     })
     .post("/trades", async ({ body, set }) => {
@@ -182,6 +240,31 @@ export function createPerformanceRoutes(
         create: { securityId: security.id, tradedOn: date, closePrice: unitPrice, source: "trade" },
       });
 
+      // Sync V1Holding: ensure a holding exists for this security
+      const portfolio = await db.portfolio.findUnique({
+        where: { id: portfolioId },
+        select: { userId: true },
+      });
+      if (portfolio) {
+        const existingHolding = await db.v1Holding.findFirst({
+          where: { userId: portfolio.userId, securityId: security.id },
+        });
+        if (!existingHolding) {
+          // Create a V1Holding linked to this security
+          await db.v1Holding.create({
+            data: {
+              userId: portfolio.userId,
+              name: security.name,
+              weight: 0,
+              cost: unitPrice,
+              plPercent: 0,
+              purchaseDate: date,
+              securityId: security.id,
+            },
+          });
+        }
+      }
+
       set.status = 201;
       return {
         entry: {
@@ -196,4 +279,60 @@ export function createPerformanceRoutes(
         },
       };
     });
+}
+
+/** Get stock codes from user's held securities */
+async function getHeldStockCodes(portfolioId: string, db?: PrismaClient): Promise<string[]> {
+  if (!db) return [];
+
+  // Get from V1 holdings (the AI-native user profile)
+  const portfolio = await db.portfolio.findUnique({
+    where: { id: portfolioId },
+    select: { userId: true },
+  });
+  if (!portfolio) return [];
+
+  const holdings = await db.v1Holding.findMany({
+    where: { userId: portfolio.userId },
+    select: { name: true },
+  });
+
+  // Map stock names to codes (same mapping used in agent-client)
+  const stockCodes: Record<string, string> = {
+    台積電: "2330",
+    聯發科: "2454",
+    長榮: "2603",
+    聯電: "2303",
+    鴻海: "2317",
+    元大高股息: "0056",
+    元大台灣50: "0050",
+    中華電: "2412",
+    台泥: "1101",
+    兆豐金: "2886",
+    統一: "1216",
+    中鋼: "2002",
+    廣達: "2382",
+    緯創: "3231",
+    陽明: "2609",
+    華航: "2610",
+    國巨: "2327",
+  };
+
+  // Also try from ledger securities
+  const securities = await db.ledgerEntry.findMany({
+    where: { portfolioId, securityId: { not: null } },
+    select: { security: { select: { symbol: true } } },
+    distinct: ["securityId"],
+  });
+
+  const codes = new Set<string>();
+  for (const h of holdings) {
+    const code = stockCodes[h.name];
+    if (code) codes.add(code);
+  }
+  for (const entry of securities) {
+    if (entry.security?.symbol) codes.add(entry.security.symbol);
+  }
+
+  return [...codes];
 }

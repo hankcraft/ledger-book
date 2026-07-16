@@ -13,11 +13,15 @@
     "db:studio": "bun --env-file=../../.env prisma studio"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-bedrock-agentcore": "3.1028.0",
+    "@aws-sdk/credential-provider-node": "^3.750.0",
     "@elysiajs/cors": "1.3.2",
     "@ledger-book/contracts": "workspace:*",
     "@prisma/client": "6.9.0",
     "@railpath/finance-toolkit": "0.5.4",
+    "@smithy/protocol-http": "^5.0.0",
+    "@smithy/signature-v4": "^5.0.0",
     "elysia": "1.4.29",
     "node-irr": "2.0.5"
   },
