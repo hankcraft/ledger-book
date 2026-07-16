@@ -126,8 +126,9 @@ const DEFAULT_PORTFOLIO_ID = "demo-portfolio";
 const BENCHMARK_SYMBOL = "0050";
 
 /**
- * Seeds portfolio-level data (securities, ledger entries, market prices)
- * from a template so the performance page has data to render.
+ * Seeds portfolio-level data (securities, ledger entries, market prices,
+ * importBatch, and analysisEvidence) from a template so that the
+ * performance page, time-travel, and v1 APIs all have data to render.
  */
 async function seedPortfolioFromTemplate(
   db: PrismaClient,
@@ -149,18 +150,30 @@ async function seedPortfolioFromTemplate(
     },
   });
 
-  // Clear existing ledger entries and market prices for a clean slate
+  // ── Clean slate: remove old time-travel reports, evidence, ledger, and imports ──
+  // Delete report→evidence links first (FK constraint)
+  const existingReports = await db.timeTravelReport.findMany({
+    where: { portfolioId },
+    select: { id: true },
+  });
+  if (existingReports.length > 0) {
+    await db.timeTravelReportEvidence.deleteMany({
+      where: { reportId: { in: existingReports.map((r) => r.id) } },
+    });
+    await db.timeTravelReport.deleteMany({ where: { portfolioId } });
+  }
   await db.ledgerEntry.deleteMany({ where: { portfolioId } });
+  await db.importBatch.deleteMany({ where: { portfolioId } });
 
-  // Upsert securities and collect IDs
+  // Upsert securities using the template's symbol (stock code)
   const holdingSecurities: Array<{ securityId: string; holding: (typeof template.holdings)[0] }> =
     [];
   for (const h of template.holdings) {
     const security = await db.security.upsert({
-      where: { market_symbol: { market: "TWSE", symbol: h.name } },
-      update: {},
+      where: { market_symbol: { market: "TWSE", symbol: h.symbol } },
+      update: { name: h.name },
       create: {
-        symbol: h.name,
+        symbol: h.symbol,
         market: "TWSE",
         name: h.name,
         assetType: "stock",
@@ -195,6 +208,17 @@ async function seedPortfolioFromTemplate(
     (sum, h) => sum + h.cost * SHARES_PER_HOLDING,
     0,
   );
+
+  // ── Seed importBatch so time-travel's hasImported check passes ──
+  await db.importBatch.create({
+    data: {
+      portfolioId,
+      sourcePayload: { type: "template", templateId: template.id },
+      status: "completed",
+      startedAt: new Date(),
+      completedAt: new Date(),
+    },
+  });
 
   // Create ledger entries: one cash deposit + one buy per holding
   let sequence = 1;
@@ -273,6 +297,36 @@ async function seedPortfolioFromTemplate(
     });
   }
 
+  // ── Seed analysisEvidence so time-travel createReport can find data ──
+  // For each security, create evidence records at multiple dates within the timeline.
+  for (const { securityId, holding } of holdingSecurities) {
+    // Remove old evidence for this security (from previous template applications)
+    await db.analysisEvidence.deleteMany({ where: { securityId, sourceName: "template-seed" } });
+
+    // Generate evidence at purchase date and ~monthly intervals until today
+    const evidenceDates = generateMonthlyDates(holding.purchaseDate, today);
+    for (const date of evidenceDates) {
+      await db.analysisEvidence.create({
+        data: {
+          securityId,
+          evidenceType: "institutional_chip",
+          observedOn: date,
+          sourceName: "template-seed",
+          payload: { label: `${holding.name} 法人買賣超資料（${date}）` },
+        },
+      });
+      await db.analysisEvidence.create({
+        data: {
+          securityId,
+          evidenceType: "forum_sentiment",
+          observedOn: date,
+          sourceName: "template-seed",
+          payload: { label: `${holding.name} 社群討論情緒摘要（${date}）` },
+        },
+      });
+    }
+  }
+
   // Link V1Holdings to their securities via securityId
   for (const { securityId, holding } of holdingSecurities) {
     await db.v1Holding.updateMany({
@@ -291,6 +345,26 @@ function generateWeeklyDates(start: string, end: string): string[] {
   while (current <= endDate) {
     dates.push(current.toISOString().slice(0, 10));
     current.setDate(current.getDate() + 7);
+  }
+
+  // Always include the end date
+  const lastDate = dates.at(-1);
+  if (lastDate !== end && new Date(end) > new Date(lastDate!)) {
+    dates.push(end);
+  }
+
+  return dates;
+}
+
+/** Generate monthly date strings between start and end (inclusive of both). */
+function generateMonthlyDates(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const current = new Date(start);
+  const endDate = new Date(end);
+
+  while (current <= endDate) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setMonth(current.getMonth() + 1);
   }
 
   // Always include the end date
