@@ -160,12 +160,11 @@ async function* readableStreamToAsyncIterable(
 const FOLLOW_UP_SUFFIX = `
 
 ---
-在你的回覆最後，請用以下格式附上 3 個後續追問選項（根據上面的對話內容動態產生，不要重複已回答過的方向）：
+如果這段對話還有自然延伸的方向，在回覆最後附上 1-3 個後續追問選項（用使用者的口吻寫，像他會自己想問的問題）。如果對話已經回答完畢、沒有需要延伸的，就不用附。
 
+格式：
 [FOLLOW_UP]
-- 選項一
-- 選項二
-- 選項三
+- 選項
 [/FOLLOW_UP]`;
 
 const FOLLOW_UP_REGEX = /\[FOLLOW_UP\]\s*([\s\S]*?)\s*\[\/FOLLOW_UP\]/;
@@ -294,13 +293,15 @@ function buildStructuredMessages(
     }
   }
 
+  // Only show follow-up options if the agent produced them (conversation not concluded)
+  const followUpOptions = options.length > 0 ? options : DEFAULT_OPTIONS;
   messages.push({
     id: `${turnId}-question`,
     role: "agent",
     card: {
       type: "confirmation-question",
       question: "你想進一步了解哪個方向？",
-      options: options.length > 0 ? options : DEFAULT_OPTIONS,
+      options: followUpOptions,
     },
   });
 
