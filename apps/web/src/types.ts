@@ -64,7 +64,8 @@ export type CardType =
   | "memory-recall"
   | "evidence"
   | "scenario-comparison"
-  | "confirmation-question";
+  | "confirmation-question"
+  | "artifact-save";
 
 export interface ContextSummaryData {
   type: "context-summary";
@@ -113,13 +114,21 @@ export interface ConfirmationData {
   options: string[];
 }
 
+export interface ArtifactSaveData {
+  type: "artifact-save";
+  artifactType: "principle" | "memory";
+  text: string;
+  label: string;
+}
+
 export type CardData =
   | ContextSummaryData
   | InsightData
   | MemoryRecallData
   | EvidenceData
   | ScenarioData
-  | ConfirmationData;
+  | ConfirmationData
+  | ArtifactSaveData;
 
 export interface ConversationStep {
   role: MessageRole;

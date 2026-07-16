@@ -23,6 +23,10 @@ export interface ContextService {
   ): Promise<{ response: string; inferences: V1Inference[] }>;
   completeOnboarding(userId: string, data: OnboardingData): Promise<V1UserContext>;
   applyTemplate(userId: string, templateId: string): Promise<V1UserContext>;
+  /** Add a new principle from a conversation conclusion */
+  addPrinciple(userId: string, statement: string, source: string): Promise<V1Principle>;
+  /** Add a new memory from a conversation conclusion */
+  addMemory(userId: string, quote: string, source: string): Promise<V1Memory>;
 }
 
 export interface OnboardingData {
@@ -489,6 +493,33 @@ export function createContextService(db: PrismaClient): ContextService {
       await seedPortfolioFromTemplate(db, userId, template);
 
       return this.getContext(userId);
+    },
+
+    async addPrinciple(userId, statement, source) {
+      const row = await db.v1Principle.create({
+        data: {
+          userId,
+          statement,
+          confirmedAt: new Date().toISOString().slice(0, 10),
+          source,
+          paused: false,
+          badge: "對話結論",
+        },
+      });
+      return toPrinciple(row);
+    },
+
+    async addMemory(userId, quote, source) {
+      const row = await db.v1Memory.create({
+        data: {
+          userId,
+          quote,
+          date: new Date().toISOString().slice(0, 10),
+          source,
+          archived: false,
+        },
+      });
+      return toMemory(row);
     },
   };
 }
