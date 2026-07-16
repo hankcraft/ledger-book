@@ -4,188 +4,308 @@ specification {
   element existingsystem
   element spa { style { shape browser } }
   element container
+  element library
   element database { style { shape storage } }
   element component { style { shape component } }
 }
 
 model {
   investor = person 'Investor' {
-    description 'Single demo user who imports a portfolio and reads factual analysis.'
+    description 'Single demo user who imports a portfolio, views performance, and chats with AI agent.'
   }
 
   cmoney = existingsystem 'Authorized CMoney Data' {
     description 'Authorized historical price, chip, fundamental, and discussion evidence source.'
   }
 
-  aws-bedrock = existingsystem 'AWS Bedrock' {
-    description 'External managed AI platform.'
+  aws-cloud = existingsystem 'AWS Cloud Services' {
+    description 'External managed cloud services (Bedrock, OpenSearch Serverless).'
 
-    agentcore = container 'Bedrock AgentCore' {
-      technology 'AWS Bedrock AgentCore'
-      description 'Orchestrates factual, scoped analysis generation.'
+    bedrock = existingsystem 'Amazon Bedrock' {
+      technology 'Nova Pro v1 (ConverseStream)'
+      description 'Foundation model inference for grounded portfolio analysis.'
     }
-    knowledge-base = container 'Bedrock Knowledge Base' {
-      technology 'Amazon Bedrock Knowledge Bases'
-      description 'Holds authorized RAG chunks with security and date metadata.'
+    opensearch-serverless = existingsystem 'OpenSearch Serverless' {
+      technology 'SEARCH type collection'
+      description 'Hosts structured stock market indices for Agent RAG queries.'
     }
   }
 
-  ledger-book = softwaresystem '股票帳本 Ledger Book' {
-    description 'Quantifies portfolio performance and provides non-advisory historical analysis.'
+  ledger-book = softwaresystem '投資搭檔 Ledger Book' {
+    description 'Quantifies portfolio performance and provides non-advisory AI-powered portfolio insights.'
 
     web-spa = spa 'Browser SPA' {
-      technology 'Vue 3 + Vite'
-      description 'Demo import, dashboard, and time-travel report interface.'
+      technology 'Vue 3 + Vite + Vue Router'
+      description 'Onboarding, home scenario, performance dashboard, AI chat, and context management.'
     }
+
     ledger-api = container 'Ledger Book API' {
       technology 'Bun + TypeScript + Elysia'
-      description 'Synchronous REST API and business orchestration.'
+      description 'Synchronous REST API, business orchestration, and agent proxy.'
 
-      import-controller = component 'Demo Import Controller' {
-        technology 'Elysia route handler'
-        description 'Starts one hardcoded demo import.'
+      import-routes = component 'Import Routes' {
+        technology 'Elysia route'
+        description 'Starts CSV import flow.'
+      }
+      portfolio-routes = component 'Portfolio Routes' {
+        technology 'Elysia route'
+        description 'Serves portfolio and dashboard data.'
+      }
+      time-travel-routes = component 'Time-Travel Routes' {
+        technology 'Elysia route'
+        description 'Requests date-scoped time-travel reports.'
+      }
+      onboarding-routes = component 'Onboarding Routes' {
+        technology 'Elysia route (v1)'
+        description 'Handles onboarding flow.'
+      }
+      home-routes = component 'Home Routes' {
+        technology 'Elysia route (v1)'
+        description 'Loads daily scenario greeting.'
+      }
+      conversation-routes = component 'Conversation Routes' {
+        technology 'Elysia route (v1)'
+        description 'Manages conversation history.'
+      }
+      context-routes = component 'Context Routes' {
+        technology 'Elysia route (v1)'
+        description 'CRUD operations for user context.'
+      }
+      performance-routes = component 'Performance Routes' {
+        technology 'Elysia route (v1)'
+        description 'Loads performance data and charts.'
+      }
+      agent-chat-routes = component 'Agent Chat Routes' {
+        technology 'Elysia route'
+        description 'AI chat endpoint with SSE streaming.'
+      }
+
+      import-service = component 'Import Service' {
+        technology 'TypeScript'
+        description 'Parses CSV and creates immutable ledger entries via ledger-service.'
+      }
+      portfolio-service = component 'Portfolio Service' {
+        technology 'TypeScript + node-irr + @railpath/finance-toolkit'
+        description 'Builds valuations, XIRR, TWR, and benchmark values from ledger data.'
+      }
+      conversation-service = component 'Conversation Service' {
+        technology 'TypeScript'
+        description 'Manages multi-turn AI conversation state and history.'
       }
       ledger-service = component 'Immutable Ledger Service' {
         technology 'TypeScript'
-        description 'Appends entries, creates reversals, and invalidates derived dashboard cache.'
+        description 'Appends entries with sequence numbers; creates reversals.'
       }
-      dashboard-controller = component 'Dashboard Controller' {
-        technology 'Elysia route handler'
-        description 'Serves the selected-date dashboard resource.'
+      time-travel-service = component 'Time-Travel Service' {
+        technology 'TypeScript'
+        description 'Creates date-scoped factual reports from evidence with compliance check.'
       }
-      performance-service = component 'Performance Service' {
-        technology 'TypeScript + node-irr + @railpath/finance-toolkit'
-        description 'Builds valuations, XIRR, TWR, and benchmark values.'
+      context-service = component 'Context Service' {
+        technology 'TypeScript'
+        description 'Manages user holdings, principles, memories, inferences, behaviors.'
       }
-      report-controller = component 'Time-Travel Report Controller' {
-        technology 'Elysia route handler'
-        description 'Creates or retrieves a selected-date report.'
+      agent-client = component 'Agent Client' {
+        technology 'TypeScript + fetch'
+        description 'HTTP client that invokes agent-runtime and transforms SSE into V1 stream messages.'
       }
-      analysis-service = component 'Analysis Service' {
-        technology 'TypeScript + AWS SDK'
-        description 'Retrieves evidence, invokes AgentCore, persists audit data, and caches passed reports.'
-      }
-      compliance-gate = component 'Compliance Gate' {
-        technology 'TypeScript policy'
-        description 'Rejects investment-advice language and records report status.'
+      compliance-check = component 'Compliance Check' {
+        technology 'TypeScript regex'
+        description 'Rejects investment-advice language (buy/sell/hold) in generated summaries.'
       }
     }
+
+    agent-runtime = container 'Stock Analysis Agent' {
+      technology 'Node.js 22 + AWS SDK'
+      description 'AgentCore-compatible runtime: queries OpenSearch, invokes Bedrock Nova Pro, streams analysis.'
+
+      http-server = component 'HTTP Server' {
+        technology 'Node.js HTTP (port 8080)'
+        description 'Implements AgentCore contract (GET /ping, POST /invocations).'
+      }
+      opensearch-client = component 'OpenSearch Client' {
+        technology 'SigV4 signed requests'
+        description 'Queries structured stock market indices.'
+      }
+      bedrock-client = component 'Bedrock Client' {
+        technology 'AWS SDK ConverseStream'
+        description 'Invokes Bedrock Nova Pro for grounded analysis.'
+      }
+      prompt-builder = component 'Prompt Builder' {
+        technology 'system + user prompts'
+        description 'Constructs system and user prompts from market data context.'
+      }
+    }
+
     ledger-db = database 'Ledger Book Database' {
-      technology 'PostgreSQL + Prisma'
-      description 'System of record for append-only ledger, seeds, derived data, and report audit data.'
+      technology 'PostgreSQL 16 + Prisma'
+      description 'System of record for append-only ledger, user context, conversations, and report audit data.'
     }
-    ledger-cache = container 'Derived Response Cache' {
-      technology 'Redis'
-      description 'Caches dashboard responses and passed time-travel reports.'
-    }
-    seed-loader = container 'Demo Data Seed Loader' {
-      technology 'Bun + TypeScript CLI'
-      description 'Repeatably loads approved demo data and RAG chunks.'
+
+    contracts = library 'Shared Type Contracts' {
+      technology 'TypeScript'
+      description 'Shared domain types and V1 AI-native contracts between web-spa and ledger-api.'
     }
   }
 
-  investor -> ledger-book 'imports demo ledger, views performance, requests analysis' {
+  // --- System Context relationships ---
+  investor -> ledger-book 'imports ledger, views performance, chats with AI' {
     technology 'HTTPS'
   }
   ledger-book -> cmoney 'imports authorized historical evidence' {
     technology 'controlled data transfer'
   }
-  ledger-book -> aws-bedrock 'generates factual reports' {
-    technology 'AWS SDK + HTTPS'
+  ledger-book -> aws-cloud 'queries market data + generates analysis' {
+    technology 'SigV4 HTTPS + AWS SDK'
   }
+
+  // --- Container relationships ---
   investor -> ledger-book.web-spa 'uses' {
     technology 'HTTPS'
   }
-  ledger-book.web-spa -> ledger-book.ledger-api 'calls portfolio APIs' {
+  ledger-book.web-spa -> ledger-book.ledger-api 'calls APIs' {
     technology 'HTTPS + JSON'
   }
   ledger-book.ledger-api -> ledger-book.ledger-db 'reads and writes' {
-    technology 'SQL'
+    technology 'SQL (Prisma)'
   }
-  ledger-book.ledger-api -> ledger-book.ledger-cache 'reads and writes derived responses' {
-    technology 'Redis protocol'
+  ledger-book.ledger-api -> ledger-book.agent-runtime 'invokes analysis' {
+    technology 'HTTPS + SSE'
   }
-  ledger-book.ledger-api -> aws-bedrock.agentcore 'invokes grounded analysis' {
-    technology 'AWS SDK + HTTPS'
+  ledger-book.agent-runtime -> aws-cloud.opensearch-serverless 'queries structured market data' {
+    technology 'SigV4 HTTPS'
   }
-  ledger-book.seed-loader -> cmoney 'imports authorized evidence' {
-    technology 'controlled data transfer'
+  ledger-book.agent-runtime -> aws-cloud.bedrock 'generates grounded analysis' {
+    technology 'AWS SDK ConverseStream'
   }
-  ledger-book.seed-loader -> ledger-book.ledger-db 'seeds prices, evidence, and demo data' {
-    technology 'SQL'
+  ledger-book.contracts -> ledger-book.web-spa 'shared types' {
+    technology 'TypeScript import'
   }
-  ledger-book.seed-loader -> aws-bedrock.knowledge-base 'indexes RAG chunks' {
-    technology 'AWS SDK + HTTPS'
+  ledger-book.contracts -> ledger-book.ledger-api 'shared types' {
+    technology 'TypeScript import'
   }
-  aws-bedrock.agentcore -> aws-bedrock.knowledge-base 'retrieves scoped evidence' {
-    technology 'Bedrock internal API'
-  }
-  ledger-book.web-spa -> ledger-book.ledger-api.import-controller 'starts import' {
+
+  // --- Component relationships: web-spa → ledger-api routes ---
+  ledger-book.web-spa -> ledger-book.ledger-api.import-routes 'starts import' {
     technology 'HTTPS + JSON'
   }
-  ledger-book.web-spa -> ledger-book.ledger-api.dashboard-controller 'loads dashboard' {
+  ledger-book.web-spa -> ledger-book.ledger-api.portfolio-routes 'loads portfolio and dashboard' {
     technology 'HTTPS + JSON'
   }
-  ledger-book.web-spa -> ledger-book.ledger-api.report-controller 'requests report' {
+  ledger-book.web-spa -> ledger-book.ledger-api.time-travel-routes 'requests time-travel report' {
     technology 'HTTPS + JSON'
   }
-  ledger-book.ledger-api.import-controller -> ledger-book.ledger-api.ledger-service 'imports immutable entries' {
+  ledger-book.web-spa -> ledger-book.ledger-api.onboarding-routes 'onboarding flow' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api.home-routes 'loads scenario' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api.context-routes 'manages user context' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api.performance-routes 'loads performance data' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api.agent-chat-routes 'AI chat' {
+    technology 'HTTPS + SSE'
+  }
+  ledger-book.web-spa -> ledger-book.ledger-api.conversation-routes 'conversation history' {
+    technology 'HTTPS + JSON'
+  }
+
+  // --- Component relationships: ledger-api internal ---
+  ledger-book.ledger-api.import-routes -> ledger-book.ledger-api.import-service 'imports entries' {
     technology 'TypeScript'
   }
-  ledger-book.ledger-api.ledger-service -> ledger-book.ledger-db 'appends ledger' {
-    technology 'SQL'
-  }
-  ledger-book.ledger-api.ledger-service -> ledger-book.ledger-cache 'invalidates dashboard cache' {
-    technology 'Redis protocol'
-  }
-  ledger-book.ledger-api.dashboard-controller -> ledger-book.ledger-api.performance-service 'loads dashboard' {
+  ledger-book.ledger-api.import-service -> ledger-book.ledger-api.ledger-service 'appends entries' {
     technology 'TypeScript'
   }
-  ledger-book.ledger-api.performance-service -> ledger-book.ledger-db 'reads snapshots, prices, and ledger' {
+  ledger-book.ledger-api.ledger-service -> ledger-book.ledger-db 'appends immutable ledger' {
     technology 'SQL'
   }
-  ledger-book.ledger-api.performance-service -> ledger-book.ledger-cache 'gets or stores dashboard' {
-    technology 'Redis protocol'
-  }
-  ledger-book.ledger-api.report-controller -> ledger-book.ledger-api.analysis-service 'creates or reads report' {
+  ledger-book.ledger-api.portfolio-routes -> ledger-book.ledger-api.portfolio-service 'computes metrics' {
     technology 'TypeScript'
   }
-  ledger-book.ledger-api.analysis-service -> ledger-book.ledger-db 'retrieves evidence and stores report audit data' {
+  ledger-book.ledger-api.portfolio-service -> ledger-book.ledger-db 'reads snapshots, prices, ledger' {
     technology 'SQL'
   }
-  ledger-book.ledger-api.analysis-service -> aws-bedrock.agentcore 'invokes factual synthesis' {
-    technology 'AWS SDK + HTTPS'
-  }
-  ledger-book.ledger-api.analysis-service -> ledger-book.ledger-api.compliance-gate 'checks generated report' {
+  ledger-book.ledger-api.time-travel-routes -> ledger-book.ledger-api.time-travel-service 'creates report' {
     technology 'TypeScript'
   }
-  ledger-book.ledger-api.analysis-service -> ledger-book.ledger-cache 'caches passed report' {
-    technology 'Redis protocol'
-  }
-  ledger-book.ledger-api.compliance-gate -> ledger-book.ledger-db 'records compliance status' {
+  ledger-book.ledger-api.time-travel-service -> ledger-book.ledger-db 'reads evidence, writes report' {
     technology 'SQL'
+  }
+  ledger-book.ledger-api.time-travel-service -> ledger-book.ledger-api.compliance-check 'validates summary' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.agent-chat-routes -> ledger-book.ledger-api.agent-client 'invokes agent' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.agent-client -> ledger-book.agent-runtime 'streams analysis' {
+    technology 'HTTPS + SSE'
+  }
+  ledger-book.ledger-api.onboarding-routes -> ledger-book.ledger-api.context-service 'manages onboarding' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.context-routes -> ledger-book.ledger-api.context-service 'CRUD context' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.home-routes -> ledger-book.ledger-api.context-service 'generates scenario' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.context-service -> ledger-book.ledger-db 'reads and writes user context' {
+    technology 'SQL'
+  }
+  ledger-book.ledger-api.conversation-routes -> ledger-book.ledger-api.conversation-service 'manages conversations' {
+    technology 'TypeScript'
+  }
+  ledger-book.ledger-api.conversation-service -> ledger-book.ledger-db 'reads and writes conversations' {
+    technology 'SQL'
+  }
+
+  // --- Component relationships: agent-runtime internal ---
+  ledger-book.ledger-api -> ledger-book.agent-runtime.http-server 'POST /invocations' {
+    technology 'HTTPS + JSON'
+  }
+  ledger-book.agent-runtime.http-server -> ledger-book.agent-runtime.opensearch-client 'queries stock indices' {
+    technology 'TypeScript'
+  }
+  ledger-book.agent-runtime.opensearch-client -> aws-cloud.opensearch-serverless 'structured queries' {
+    technology 'SigV4 HTTPS'
+  }
+  ledger-book.agent-runtime.http-server -> ledger-book.agent-runtime.prompt-builder 'builds prompt context' {
+    technology 'TypeScript'
+  }
+  ledger-book.agent-runtime.http-server -> ledger-book.agent-runtime.bedrock-client 'invokes LLM' {
+    technology 'TypeScript'
+  }
+  ledger-book.agent-runtime.bedrock-client -> aws-cloud.bedrock 'ConverseStream' {
+    technology 'AWS SDK'
+  }
+  ledger-book.agent-runtime.http-server -> ledger-book.ledger-api 'streams SSE response' {
+    technology 'HTTPS'
   }
 }
 
 views {
   view index {
-    title 'Landscape — 股票帳本 Ledger Book'
+    title 'Landscape — 投資搭檔 Ledger Book'
     include *
   }
 
   view context {
-    title 'System Context — 股票帳本 Ledger Book'
+    title 'System Context — 投資搭檔 Ledger Book'
     include ledger-book
     include -> ledger-book ->
   }
 
   view containers of ledger-book {
-    title 'Containers — 股票帳本 Ledger Book'
+    title 'Containers — 投資搭檔 Ledger Book'
     include *
     include investor
     include cmoney
-    include aws-bedrock
-    include aws-bedrock.*
+    include aws-cloud
+    include aws-cloud.*
   }
 
   view ledger-api of ledger-book.ledger-api {
@@ -194,7 +314,15 @@ views {
     include -> ledger-book.ledger-api ->
     include ledger-book.web-spa
     include ledger-book.ledger-db
-    include ledger-book.ledger-cache
-    include aws-bedrock.agentcore
+    include ledger-book.agent-runtime
+  }
+
+  view agent-runtime of ledger-book.agent-runtime {
+    title 'Components — Stock Analysis Agent'
+    include *
+    include -> ledger-book.agent-runtime ->
+    include ledger-book.ledger-api
+    include aws-cloud.opensearch-serverless
+    include aws-cloud.bedrock
   }
 }
