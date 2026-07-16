@@ -25,29 +25,29 @@ typography:
   fontFamily: "Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Noto Sans TC', sans-serif"
   scale: "Major Third (1.25)"
   display:
-    fontSize: "28px"
+    fontSize: "32px"
     fontWeight: 800
     lineHeight: 1.1
     letterSpacing: "-0.02em"
   heading:
-    fontSize: "22px"
+    fontSize: "24px"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.01em"
   lg:
-    fontSize: "18px"
+    fontSize: "20px"
     fontWeight: 600
     lineHeight: 1.35
   body:
-    fontSize: "15px"
+    fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.6
   caption:
-    fontSize: "13px"
+    fontSize: "14px"
     fontWeight: 500
     lineHeight: 1.5
   xs:
-    fontSize: "11px"
+    fontSize: "12px"
     fontWeight: 500
     lineHeight: 1.45
 spacing:
@@ -182,12 +182,12 @@ This is NOT a marketing landing page adaptation — it's the Corporate Trust vis
 
 | Token | Size | Weight | Line-height | Letter-spacing | Usage |
 |-------|------|--------|-------------|----------------|-------|
-| `--text-display` | 1.75rem (28px) | 800 | 1.1 | -0.02em | Portfolio value, hero numbers |
-| `--text-heading` | 1.375rem (22px) | 700 | 1.2 | -0.01em | Page titles |
-| `--text-lg` | 1.125rem (18px) | 600 | 1.35 | normal | Section sub-headings |
-| `--text-body` | 0.9375rem (15px) | 400 | 1.6 | normal | Default body |
-| `--text-caption` | 0.8125rem (13px) | 500 | 1.5 | normal | Labels, metadata |
-| `--text-xs` | 0.6875rem (11px) | 500 | 1.45 | 0.01em | Fine print, badges |
+| `--text-display` | 2rem (32px) | 800 | 1.1 | -0.02em | Portfolio value, hero numbers |
+| `--text-heading` | 1.5rem (24px) | 700 | 1.2 | -0.01em | Page titles |
+| `--text-lg` | 1.25rem (20px) | 600 | 1.35 | normal | Section sub-headings |
+| `--text-body` | 1rem (16px) | 400 | 1.6 | normal | Default body |
+| `--text-caption` | 0.875rem (14px) | 500 | 1.5 | normal | Labels, metadata |
+| `--text-xs` | 0.75rem (12px) | 500 | 1.45 | 0.01em | Fine print, badges |
 
 ### Weight tokens
 
@@ -309,6 +309,6 @@ background-clip: text;
 | Colored shadows (indigo-tinted) | The signature visual trait. Creates cohesive depth without the cold feel of neutral grey shadows |
 | 12px card radius (up from 8px) | Friendlier, more modern. Matches the "approachable enterprise" philosophy |
 | Gradient primary buttons | Strong visual presence for CTAs. The indigo→violet direction reinforces brand |
-| 15px body text (down from 16px) | Better information density for mobile finance. Jakarta Sans reads well at smaller sizes |
+| 16px body text | Standard browser default. Maximizes legibility on mobile without sacrificing density — Jakarta Sans remains compact at 1rem |
 | Caption weight 500 (up from 400) | Jakarta Sans at small sizes needs medium weight for legibility |
 | Semi-transparent card border | Softer edge that doesn't compete with the colored shadow for definition |
