@@ -87,7 +87,7 @@ success "All prerequisites found"
 # =============================================================================
 step "Building monorepo..."
 cd "$PROJECT_ROOT"
-bun run build
+VITE_API_MODE=real bun run build
 success "Build complete"
 
 # =============================================================================
