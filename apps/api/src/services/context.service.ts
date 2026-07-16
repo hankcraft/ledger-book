@@ -271,6 +271,14 @@ async function seedPortfolioFromTemplate(
       },
     });
   }
+
+  // Link V1Holdings to their securities via securityId
+  for (const { securityId, holding } of holdingSecurities) {
+    await db.v1Holding.updateMany({
+      where: { userId, name: holding.name, securityId: null },
+      data: { securityId },
+    });
+  }
 }
 
 /** Generate weekly date strings between start and end (inclusive of both). */
@@ -409,7 +417,20 @@ export function createContextService(db: PrismaClient): ContextService {
     async completeOnboarding(userId, data) {
       const plPercent = data.pnlStatus === "PROFIT" ? 12 : data.pnlStatus === "LOSS" ? -5 : 1;
 
-      // Upsert user's primary holding from onboarding
+      // Upsert security for the onboarded stock
+      const security = await db.security.upsert({
+        where: { market_symbol: { market: "TWSE", symbol: data.stockName } },
+        update: {},
+        create: {
+          symbol: data.stockName,
+          market: "TWSE",
+          name: data.stockName,
+          assetType: "stock",
+          currency: "TWD",
+        },
+      });
+
+      // Create holding linked to security
       await db.v1Holding.create({
         data: {
           userId,
@@ -417,6 +438,7 @@ export function createContextService(db: PrismaClient): ContextService {
           weight: data.weightPercent ?? 30,
           cost: data.cost ?? 500,
           plPercent,
+          securityId: security.id,
         },
       });
 

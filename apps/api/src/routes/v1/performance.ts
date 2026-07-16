@@ -285,54 +285,61 @@ export function createPerformanceRoutes(
 async function getHeldStockCodes(portfolioId: string, db?: PrismaClient): Promise<string[]> {
   if (!db) return [];
 
-  // Get from V1 holdings (the AI-native user profile)
   const portfolio = await db.portfolio.findUnique({
     where: { id: portfolioId },
     select: { userId: true },
   });
   if (!portfolio) return [];
 
+  // Primary path: V1Holdings with securityId FK
   const holdings = await db.v1Holding.findMany({
     where: { userId: portfolio.userId },
-    select: { name: true },
+    select: { name: true, security: { select: { symbol: true } } },
   });
 
-  // Map stock names to codes (same mapping used in agent-client)
-  const stockCodes: Record<string, string> = {
-    台積電: "2330",
-    聯發科: "2454",
-    長榮: "2603",
-    聯電: "2303",
-    鴻海: "2317",
-    元大高股息: "0056",
-    元大台灣50: "0050",
-    中華電: "2412",
-    台泥: "1101",
-    兆豐金: "2886",
-    統一: "1216",
-    中鋼: "2002",
-    廣達: "2382",
-    緯創: "3231",
-    陽明: "2609",
-    華航: "2610",
-    國巨: "2327",
-  };
+  const codes = new Set<string>();
 
-  // Also try from ledger securities
-  const securities = await db.ledgerEntry.findMany({
+  for (const h of holdings) {
+    if (h.security?.symbol) {
+      // Linked via FK — use the symbol directly
+      codes.add(h.security.symbol);
+    } else {
+      // Fallback: name→code mapping for legacy holdings without securityId
+      const code = STOCK_NAME_TO_CODE[h.name];
+      if (code) codes.add(code);
+    }
+  }
+
+  // Also include symbols from ledger entries (covers trades not yet in V1Holding)
+  const ledgerSecurities = await db.ledgerEntry.findMany({
     where: { portfolioId, securityId: { not: null } },
     select: { security: { select: { symbol: true } } },
     distinct: ["securityId"],
   });
-
-  const codes = new Set<string>();
-  for (const h of holdings) {
-    const code = stockCodes[h.name];
-    if (code) codes.add(code);
-  }
-  for (const entry of securities) {
+  for (const entry of ledgerSecurities) {
     if (entry.security?.symbol) codes.add(entry.security.symbol);
   }
 
   return [...codes];
 }
+
+/** Fallback mapping for holdings without securityId (legacy/migration) */
+const STOCK_NAME_TO_CODE: Record<string, string> = {
+  台積電: "2330",
+  聯發科: "2454",
+  長榮: "2603",
+  聯電: "2303",
+  鴻海: "2317",
+  元大高股息: "0056",
+  元大台灣50: "0050",
+  中華電: "2412",
+  台泥: "1101",
+  兆豐金: "2886",
+  統一: "1216",
+  中鋼: "2002",
+  廣達: "2382",
+  緯創: "3231",
+  陽明: "2609",
+  華航: "2610",
+  國巨: "2327",
+};
