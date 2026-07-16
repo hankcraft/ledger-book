@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LoadingSpinner from "./LoadingSpinner.vue";
 import { useQuickEntry } from "../composables/useQuickEntry";
 
 const { form, submitting, error, grossAmount, isValid, submitEntry } = useQuickEntry();
@@ -115,6 +116,7 @@ function formatAmount(value: number): string {
 
     <!-- Submit -->
     <button type="submit" class="submit-btn" :disabled="!isValid || submitting">
+      <LoadingSpinner v-if="submitting" :size="14" />
       {{ submitting ? "新增中…" : "新增" }}
     </button>
   </form>
@@ -206,6 +208,10 @@ function formatAmount(value: number): string {
 }
 
 .submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   padding: var(--space-3) var(--space-6);
   border-radius: var(--radius-card);
   background: var(--action-primary);

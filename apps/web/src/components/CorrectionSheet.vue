@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
+import LoadingSpinner from "./LoadingSpinner.vue";
+
 defineProps<{
   open: boolean;
   submitting: boolean;
@@ -48,6 +50,7 @@ function handleClose(): void {
             :disabled="!input.trim() || submitting"
             @click="handleSubmit"
           >
+            <LoadingSpinner v-if="submitting" :size="14" />
             {{ submitting ? "送出中…" : "送出" }}
           </button>
           <div v-else class="response">
@@ -132,6 +135,10 @@ function handleClose(): void {
 }
 
 .submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   background: var(--action-primary);
   color: var(--on-ink);
 }
