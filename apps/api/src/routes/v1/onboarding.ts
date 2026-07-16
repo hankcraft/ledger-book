@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import type { ContextService } from "../../services/context.service.ts";
-import { invokeAgent } from "../../agent-client.ts";
+import { invokeAgent, extractFollowUpOptions } from "../../agent-client.ts";
 
 export function createOnboardingRoutes(contextService: ContextService, getUserId: () => string) {
   return new Elysia({ name: "routes:v1:onboarding", prefix: "/api/v1/onboarding" })
@@ -9,8 +9,9 @@ export function createOnboardingRoutes(contextService: ContextService, getUserId
       async ({ body }) => {
         try {
           const prompt = `分析 ${body.stockName} 對一位目前持有中的投資者，目前的市場位置和可能的焦慮來源。請用繁體中文，簡潔回答，150字以內。不要給投資建議。`;
-          const insight = await invokeAgent({ prompt });
-          return { insight };
+          const raw = await invokeAgent({ prompt });
+          const { text } = extractFollowUpOptions(raw);
+          return { insight: text || raw };
         } catch (err) {
           console.log(
             "[v1] Agent unavailable for insight, using fallback:",
@@ -32,8 +33,9 @@ export function createOnboardingRoutes(contextService: ContextService, getUserId
                 ? "虧損中"
                 : "接近成本";
           const prompt = `投資者持有 ${body.stockName}，成本約 ${body.cost ?? 500} 元，佔部位 ${body.weightPercent ?? 30}%，目前${pnlLabel}。分析這位投資者的焦慮來源是「價格焦慮」還是「配置焦慮」，並給出觀察。請用繁體中文，200字以內。不要給投資建議。`;
-          const insight = await invokeAgent({ prompt });
-          return { insight };
+          const raw = await invokeAgent({ prompt });
+          const { text } = extractFollowUpOptions(raw);
+          return { insight: text || raw };
         } catch (err) {
           console.log(
             "[v1] Agent unavailable for final-insight, using fallback:",

@@ -152,6 +152,49 @@ async function* readableStreamToAsyncIterable(
   }
 }
 
+// ─── Follow-up Option Generation ────────────────────────────────────────────
+
+/**
+ * Appended to every agent prompt so the LLM produces parseable follow-up options.
+ */
+const FOLLOW_UP_SUFFIX = `
+
+---
+在你的回覆最後，請用以下格式附上 3 個後續追問選項（根據上面的對話內容動態產生，不要重複已回答過的方向）：
+
+[FOLLOW_UP]
+- 選項一
+- 選項二
+- 選項三
+[/FOLLOW_UP]`;
+
+const FOLLOW_UP_REGEX = /\[FOLLOW_UP\]\s*([\s\S]*?)\s*\[\/FOLLOW_UP\]/;
+
+/**
+ * Parse follow-up options from agent text and return cleaned text + options.
+ */
+export function extractFollowUpOptions(agentText: string): {
+  text: string;
+  options: string[];
+} {
+  const match = FOLLOW_UP_REGEX.exec(agentText);
+  if (!match) {
+    return { text: agentText, options: [] };
+  }
+
+  const optionsBlock = match[1]!;
+  const options = optionsBlock
+    .split("\n")
+    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 3);
+
+  const text = agentText.slice(0, match.index).trimEnd();
+  return { text, options };
+}
+
+const DEFAULT_OPTIONS = ["持股集中度分析", "法人最近動態", "我的操作模式是否一致"];
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -159,9 +202,10 @@ async function* readableStreamToAsyncIterable(
  */
 export async function invokeAgent(options: AgentInvokeOptions): Promise<string> {
   const { prompt, portfolioContext, timeout = 30_000 } = options;
-  const fullPrompt = portfolioContext
+  const basePrompt = portfolioContext
     ? `${portfolioContext}\n\n---\n\n用戶提問：${prompt}`
     : prompt;
+  const fullPrompt = `${basePrompt}\n\n${FOLLOW_UP_SUFFIX}`;
 
   if (useAgentCoreSDK) {
     return invokeViaSDK(fullPrompt, timeout);
@@ -225,12 +269,30 @@ interface StreamMessage {
 function buildStructuredMessages(
   turnId: string,
   agentText: string,
-  _userPrompt: string,
+  userPrompt: string,
 ): StreamMessage[] {
   const messages: StreamMessage[] = [];
-  const text = agentText || "無法生成回應。";
+  const { text, options } = extractFollowUpOptions(agentText || "無法生成回應。");
 
   messages.push({ id: `${turnId}-text`, role: "agent", text });
+
+  // Offer to save the conclusion as context if the response is substantial
+  if (text.length > 50) {
+    // Extract a short conclusion from the first meaningful sentence
+    const conclusion = extractConclusion(text, userPrompt);
+    if (conclusion) {
+      messages.push({
+        id: `${turnId}-artifact`,
+        role: "agent",
+        card: {
+          type: "artifact-save",
+          artifactType: "principle",
+          text: conclusion,
+          label: "可以記住這個觀察",
+        },
+      });
+    }
+  }
 
   messages.push({
     id: `${turnId}-question`,
@@ -238,11 +300,42 @@ function buildStructuredMessages(
     card: {
       type: "confirmation-question",
       question: "你想進一步了解哪個方向？",
-      options: ["持股集中度分析", "法人最近動態", "我的操作模式是否一致"],
+      options: options.length > 0 ? options : DEFAULT_OPTIONS,
     },
   });
 
   return messages;
+}
+
+/**
+ * Extract a short conclusion from agent text suitable for saving as a principle.
+ * Returns null if the text doesn't contain a clear conclusion.
+ */
+export function extractConclusion(text: string, _userPrompt: string): string | null {
+  // Look for the first sentence that contains an observation or statement
+  const sentences = text.split(/[。！\n]/).filter((s) => s.trim().length > 10);
+  if (sentences.length === 0) return null;
+
+  // Prefer sentences with keywords indicating an observation
+  const observationKeywords = [
+    "集中",
+    "風險",
+    "佔比",
+    "超過",
+    "偏高",
+    "偏低",
+    "趨勢",
+    "策略",
+    "原則",
+    "建議",
+    "注意",
+  ];
+  const observation = sentences.find((s) => observationKeywords.some((kw) => s.includes(kw)));
+
+  const candidate = observation ?? sentences[0]!;
+  // Trim to reasonable length for a principle/memory
+  const trimmed = candidate.trim().slice(0, 60);
+  return trimmed.length >= 10 ? trimmed : null;
 }
 
 // ─── Public: portfolio context builder ──────────────────────────────────────
@@ -267,6 +360,16 @@ export function buildPortfolioContext(
       鴻海: "2317",
       元大高股息: "0056",
       元大台灣50: "0050",
+      中華電: "2412",
+      台泥: "1101",
+      兆豐金: "2886",
+      統一: "1216",
+      中鋼: "2002",
+      廣達: "2382",
+      緯創: "3231",
+      陽明: "2609",
+      華航: "2610",
+      國巨: "2327",
     };
     for (const h of holdings) {
       const code = stockCodes[h.name] ?? "";
