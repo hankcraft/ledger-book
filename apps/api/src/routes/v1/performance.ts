@@ -12,7 +12,8 @@ export function createPerformanceRoutes(
   return new Elysia({ name: "routes:v1:performance", prefix: "/api/v1/performance" })
     .get("/timeline", async () => {
       const portfolioId = getPortfolioId();
-      const today = new Date().toISOString().slice(0, 10);
+      // All seed/demo data lives in 2025; cap asOfDate to 2025-12-31.
+      const today = "2025-12-31";
       const dashboard = await portfolioService.getDashboard(portfolioId, today);
 
       // ─── Collect event dates from social sentiment + dividend (NOT buy/sell) ───

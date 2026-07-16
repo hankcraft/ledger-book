@@ -17,7 +17,7 @@ export function createHomeRoutes(contextService: ContextService, getUserId: () =
       return {
         portfolioReturn: Math.round(portfolioReturn * 100) / 100,
         benchmarkReturn: 0.8,
-        asOf: new Date().toISOString().slice(0, 10),
+        asOf: "2025-12-31",
       };
     })
     .get("/scenario", async () => {

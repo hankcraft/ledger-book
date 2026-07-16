@@ -183,10 +183,11 @@ async function seedPortfolioFromTemplate(
     },
   });
 
-  // Determine timeline: earliest purchase date → today
+  // Determine timeline: earliest purchase date → end of 2025
+  // All seed data lives in 2025; cap to 2025-12-31 regardless of real clock.
   const purchaseDates = template.holdings.map((h) => h.purchaseDate).toSorted();
   const earliestDate = purchaseDates[0]!;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = "2025-12-31";
 
   // Calculate total investment (assume 1000 shares per holding for simplicity)
   const SHARES_PER_HOLDING = 1000;

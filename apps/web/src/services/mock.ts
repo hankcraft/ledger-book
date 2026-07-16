@@ -309,7 +309,7 @@ class MockHomeService implements IHomeService {
     return {
       portfolioReturn: 1.2,
       benchmarkReturn: 0.8,
-      asOf: new Date().toISOString().slice(0, 10),
+      asOf: "2025-12-31",
     };
   }
 
@@ -501,12 +501,13 @@ class MockPerformanceService implements IPerformanceService {
 
   private generateTimeline(days: number) {
     const points = [];
-    const today = new Date();
+    // All demo data lives in 2025; anchor the timeline to end on 2025-12-31.
+    const endDate = new Date("2025-12-31");
     let portfolioAcc = 0;
     let benchmarkAcc = 0;
 
     for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(today);
+      const date = new Date(endDate);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().slice(0, 10);
 
