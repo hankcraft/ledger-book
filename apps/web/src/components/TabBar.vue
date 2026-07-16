@@ -8,7 +8,7 @@ const tabs = [
   { path: "/", label: "首頁", icon: Home },
   { path: "/performance", label: "績效", icon: TrendingUp },
   { path: "/agent", label: "聊聊", icon: MessageCircle },
-  { path: "/my-data", label: "我的資料", icon: User },
+  { path: "/my-data", label: "我的庫存", icon: User },
 ] as const;
 </script>
 

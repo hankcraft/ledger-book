@@ -7,7 +7,6 @@ import AttentionItem from "../components/AttentionItem.vue";
 import ContextualInsight from "../components/ContextualInsight.vue";
 import DailyPerformanceBanner from "../components/DailyPerformanceBanner.vue";
 import HomePageSkeleton from "../components/HomePageSkeleton.vue";
-import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PageHeader from "../components/PageHeader.vue";
 import { BRAND } from "../constants/brand";
 import { useApi } from "../services";
@@ -69,14 +68,7 @@ let cachedPerformance: DP | null = null;
 
 <template>
   <main class="home" :aria-busy="loading">
-    <PageHeader :title="BRAND.appName">
-      <template #action>
-        <button class="header-action-btn" :disabled="loading" @click="loadData">
-          <LoadingSpinner v-if="loading" :size="14" />
-          {{ loading ? "整理中…" : "換個角度看" }}
-        </button>
-      </template>
-    </PageHeader>
+    <PageHeader :title="BRAND.appName" />
 
     <DailyPerformanceBanner
       v-if="performance"
@@ -122,25 +114,6 @@ let cachedPerformance: DP | null = null;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-}
-
-.header-action-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-caption);
-  color: var(--muted);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  transition:
-    border-color var(--duration-fast),
-    color var(--duration-fast);
-}
-
-.header-action-btn:hover:not(:disabled) {
-  border-color: var(--action-primary);
-  color: var(--action-primary);
 }
 
 .home-content {
