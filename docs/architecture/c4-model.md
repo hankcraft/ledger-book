@@ -1,10 +1,10 @@
-# C4 Model — 股票帳本 Ledger Book
+# C4 Model — 投資搭檔 Ledger Book
 
-> Target MVP architecture. PostgreSQL is the system of record; Redis only caches derived dashboard and passed-report responses.
+> Current implementation architecture. PostgreSQL is the system of record. The Agent runtime queries OpenSearch Serverless for structured market data and invokes Bedrock Nova Pro for grounded analysis.
 
 ## System Context
 
-Ledger Book helps a single demo investor import an immutable portfolio ledger, inspect XIRR/TWR performance, and request date-scoped factual analysis. CMoney supplies authorized historical evidence during data seeding. AWS Bedrock provides the external AgentCore and Knowledge Base services used for grounded report generation; neither may provide investment advice.
+投資搭檔 helps a single demo investor import an immutable portfolio ledger, inspect XIRR/TWR performance, converse with an AI agent for personalized portfolio insights, and request date-scoped factual analysis. CMoney supplies authorized historical evidence during data ingestion. AWS provides the external Bedrock (LLM) and OpenSearch Serverless (structured search) services; neither may provide investment advice.
 
 ```
 +----------------------------+
@@ -13,183 +13,292 @@ Ledger Book helps a single demo investor import an immutable portfolio ledger, i
 | Investor                   |
 +----------------------------+
               |
-              | imports demo ledger, views performance, requests analysis / HTTPS
+              | imports ledger, views performance, chats with AI / HTTPS
               v
-+= ledger-book : 股票帳本 Ledger Book ==================================+
++= ledger-book : 投資搭檔 Ledger Book ==================================+
 |                                                                         |
 |                     (opened in Containers section)                     |
 |                                                                         |
 +=========================================================================+
               |                                      |
-              | imports authorized historical         | generates factual reports
-              | evidence / controlled data transfer   | / AWS SDK + HTTPS
+              | imports authorized historical         | queries market data + generates analysis
+              | evidence / controlled data transfer   | / SigV4 HTTPS + AWS SDK
               v                                      v
 +----------------------------+        +----------------------------+
-| cmoney                     |        | aws-bedrock                |
+| cmoney                     |        | aws-cloud                  |
 | [existingsystem]           |        | [existingsystem]           |
-| Authorized CMoney Data     |        | AWS Bedrock                |
+| Authorized CMoney Data     |        | AWS (Bedrock + OpenSearch) |
 +----------------------------+        +----------------------------+
 ```
 
 ```
-investor --[imports demo ledger, views performance, requests analysis / HTTPS]--> ledger-book
+investor --[imports ledger, views performance, chats with AI / HTTPS]--> ledger-book
 ledger-book --[imports authorized historical evidence / controlled data transfer]--> cmoney
-ledger-book --[generates factual reports / AWS SDK + HTTPS]--> aws-bedrock
+ledger-book --[queries market data + generates analysis / SigV4 HTTPS + AWS SDK]--> aws-cloud
 ```
 
 ## Containers
 
-The Ledger Book boundary contains one browser SPA, one synchronous Bun/Elysia API, PostgreSQL, Redis, and a repeatable data-seed loader. The API owns request-path orchestration; no queue or worker exists in this MVP. AWS Bedrock is outside the system boundary, but its two managed containers are opened here to make the AgentCore-to-Knowledge-Base path explicit.
+The Ledger Book boundary contains one browser SPA, one synchronous Bun/Elysia API, an Agent runtime (deployed to AWS Bedrock AgentCore), PostgreSQL, and a shared type contracts package. The API owns request-path orchestration; no queue or worker exists. External AWS services (Bedrock for LLM, OpenSearch Serverless for structured market data) are outside the system boundary but shown for data-flow clarity.
 
 ```
-+----------------+       += ledger-book : 股票帳本 Ledger Book ===========================+
++----------------+       += ledger-book : 投資搭檔 Ledger Book ===========================+
 | investor       |       |                                                               |
 | [person]       |       | +----------------+  +----------------+  +----------------+ |
-| Investor       |       | | web-spa        |  | ledger-api     |  | ledger-db      | |
-+----------------+       | | [spa]          |  | [container]    |  | [database]     | |
-                         | | Vue 3 + Vite   |  | Bun + Elysia   |  | PostgreSQL     | |
+| Investor       |       | | web-spa        |  | ledger-api     |  | agent-runtime  | |
++----------------+       | | [spa]          |  | [container]    |  | [container]    | |
+                         | | Vue 3 + Vite   |  | Bun + Elysia   |  | Node 22 + AWS  | |
                          | +----------------+  +----------------+  +----------------+ |
                          |                                                               |
-                         | +-------------------+  +----------------+                    |
-                         | | ledger-cache      |  | seed-loader    |                    |
-                         | | [container]       |  | [container]    |                    |
-                         | | Redis             |  | Bun + TS CLI   |                    |
-                         | +-------------------+  +----------------+                    |
+                         | +-------------------+  +-------------------+                 |
+                         | | ledger-db         |  | contracts         |                 |
+                         | | [database]        |  | [library]         |                 |
+                         | | PostgreSQL        |  | TypeScript types  |                 |
+                         | +-------------------+  +-------------------+                 |
                          |                                                               |
                          +===============================================================+
 
-+----------------+       += aws-bedrock : AWS Bedrock =================================+
-| cmoney         |       | +----------------+  +-------------------+                  |
-| [existingsystem] |     | | agentcore      |  | knowledge-base    |                  |
-| CMoney Data    |       | | [container]    |  | [container]       |                  |
-+----------------+       | | AgentCore      |  | Knowledge Bases   |                  |
-                         | +----------------+  +-------------------+                  |
-                         +===============================================================+
++= aws-cloud : AWS Cloud Services =============================================+
+| +-------------------+  +----------------------------+                        |
+| | bedrock           |  | opensearch-serverless      |                        |
+| | [existingsystem]  |  | [existingsystem]           |                        |
+| | Bedrock Nova Pro  |  | OpenSearch Serverless      |                        |
+| +-------------------+  +----------------------------+                        |
++==============================================================================+
+
++----------------+
+| cmoney         |
+| [existingsystem] |
+| CMoney Data    |
++----------------+
 ```
 
 ```
 investor --[uses / HTTPS]--> web-spa
-web-spa --[calls portfolio APIs / HTTPS + JSON]--> ledger-api
+web-spa --[calls APIs / HTTPS + JSON]--> ledger-api
 ledger-api --[reads and writes / SQL]--> ledger-db
-ledger-api --[reads and writes derived responses / Redis protocol]--> ledger-cache
-ledger-api --[invokes grounded analysis / AWS SDK + HTTPS]--> agentcore
-seed-loader --[imports authorized evidence / controlled data transfer]--> cmoney
-seed-loader --[seeds prices, evidence, and demo data / SQL]--> ledger-db
-seed-loader --[indexes RAG chunks / AWS SDK + HTTPS]--> knowledge-base
-agentcore --[retrieves scoped evidence / Bedrock internal API]--> knowledge-base
+ledger-api --[invokes analysis / HTTPS + SSE]--> agent-runtime
+agent-runtime --[queries structured market data / SigV4 HTTPS]--> opensearch-serverless
+agent-runtime --[generates grounded analysis / AWS SDK ConverseStream]--> bedrock
+contracts --[shared types / TypeScript import]--> web-spa
+contracts --[shared types / TypeScript import]--> ledger-api
 ```
 
 ## Components — ledger-api
 
-The API is opened because it enforces immutable ledger writes, derives investment-performance views, and mediates the compliance-sensitive Bedrock call. Controllers remain thin Elysia route handlers; services own each business boundary.
+The API enforces immutable ledger writes, derives investment-performance views, manages user context and conversations, and mediates the compliance-sensitive agent call. Route handlers remain thin Elysia plugins; services own each business boundary.
 
 ```
 += ledger-api : Ledger Book API =======================================================+
-|                                                                                     |
-|   +----------------------+  +----------------------+  +----------------------+   |
-|   | import-controller    |  | dashboard-controller |  | report-controller    |   |
-|   | [component]          |  | [component]          |  | [component]          |   |
-|   | Elysia route         |  | Elysia route         |  | Elysia route         |   |
-|   +----------------------+  +----------------------+  +----------------------+   |
-|          |                       |                       |                        |
-|          v                       v                       v                        |
-|   +----------------------+  +----------------------+  +----------------------+   |
-|   | ledger-service       |  | performance-service  |  | analysis-service     |   |
-|   | [component]          |  | [component]          |  | [component]          |   |
-|   | TypeScript           |  | node-irr + toolkit   |  | AWS SDK              |   |
-|   +----------------------+  +----------------------+  +----------------------+   |
-|                                                       |                             |
-|                                                       v                             |
-|                                              +-------------------+                  |
-|                                              | compliance-gate   |                  |
-|                                              | [component]       |                  |
-|                                              | TypeScript policy |                  |
-|                                              +-------------------+                  |
-|                                                                                     |
-+=====================================================================================+
+|                                                                                       |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|   | import-routes       |  | portfolio-routes    |  | time-travel-routes  |          |
+|   | [component]         |  | [component]         |  | [component]         |          |
+|   | Elysia route        |  | Elysia route        |  | Elysia route        |          |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|                                                                                       |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|   | onboarding-routes   |  | home-routes         |  | conversation-routes |          |
+|   | [component]         |  | [component]         |  | [component]         |          |
+|   | Elysia route (v1)   |  | Elysia route (v1)   |  | Elysia route (v1)   |          |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|                                                                                       |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|   | context-routes      |  | performance-routes  |  | agent-chat-routes   |          |
+|   | [component]         |  | [component]         |  | [component]         |          |
+|   | Elysia route (v1)   |  | Elysia route (v1)   |  | Elysia route        |          |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|          |                       |                       |                             |
+|          v                       v                       v                             |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|   | import-service      |  | portfolio-service   |  | conversation-service|          |
+|   | [component]         |  | [component]         |  | [component]         |          |
+|   | TypeScript          |  | node-irr + toolkit  |  | TypeScript          |          |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|                                                                                       |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|   | ledger-service      |  | time-travel-service |  | context-service     |          |
+|   | [component]         |  | [component]         |  | [component]         |          |
+|   | TypeScript          |  | TypeScript          |  | TypeScript          |          |
+|   +---------------------+  +---------------------+  +---------------------+          |
+|                                                                                       |
+|   +---------------------+  +---------------------+                                   |
+|   | agent-client        |  | compliance-check    |                                   |
+|   | [component]         |  | [component]         |                                   |
+|   | HTTP fetch + SSE    |  | regex validation    |                                   |
+|   +---------------------+  +---------------------+                                   |
+|                                                                                       |
++=======================================================================================+
 ```
 
 ```
-web-spa --[starts import / HTTPS + JSON]--> import-controller
-web-spa --[loads dashboard / HTTPS + JSON]--> dashboard-controller
-web-spa --[requests report / HTTPS + JSON]--> report-controller
-import-controller --[imports immutable entries / TypeScript]--> ledger-service
-ledger-service --[appends ledger / SQL]--> ledger-db
-ledger-service --[invalidates dashboard cache / Redis protocol]--> ledger-cache
-dashboard-controller --[loads dashboard / TypeScript]--> performance-service
-performance-service --[reads snapshots, prices, and ledger / SQL]--> ledger-db
-performance-service --[gets or stores dashboard / Redis protocol]--> ledger-cache
-report-controller --[creates or reads report / TypeScript]--> analysis-service
-analysis-service --[retrieves evidence and stores report audit data / SQL]--> ledger-db
-analysis-service --[invokes factual synthesis / AWS SDK + HTTPS]--> agentcore
-analysis-service --[checks generated report / TypeScript]--> compliance-gate
-analysis-service --[caches passed report / Redis protocol]--> ledger-cache
-compliance-gate --[records compliance status / SQL]--> ledger-db
+web-spa --[starts import / HTTPS + JSON]--> import-routes
+web-spa --[loads portfolio + dashboard / HTTPS + JSON]--> portfolio-routes
+web-spa --[requests time-travel report / HTTPS + JSON]--> time-travel-routes
+web-spa --[onboarding flow / HTTPS + JSON]--> onboarding-routes
+web-spa --[loads home scenario / HTTPS + JSON]--> home-routes
+web-spa --[manages context / HTTPS + JSON]--> context-routes
+web-spa --[loads performance data / HTTPS + JSON]--> performance-routes
+web-spa --[AI chat / HTTPS + SSE]--> agent-chat-routes
+web-spa --[conversation history / HTTPS + JSON]--> conversation-routes
+
+import-routes --[imports entries / TypeScript]--> import-service
+import-service --[appends ledger / TypeScript]--> ledger-service
+ledger-service --[appends immutable entries / SQL]--> ledger-db
+
+portfolio-routes --[computes metrics / TypeScript]--> portfolio-service
+portfolio-service --[reads snapshots, prices, ledger / SQL]--> ledger-db
+
+time-travel-routes --[creates report / TypeScript]--> time-travel-service
+time-travel-service --[reads evidence, writes report / SQL]--> ledger-db
+time-travel-service --[checks compliance / TypeScript]--> compliance-check
+
+agent-chat-routes --[invokes agent / TypeScript]--> agent-client
+agent-client --[streams analysis / HTTPS + SSE]--> agent-runtime
+
+onboarding-routes --[manages onboarding / TypeScript]--> context-service
+context-routes --[CRUD context / TypeScript]--> context-service
+home-routes --[generates scenario / TypeScript]--> context-service
+context-service --[reads and writes user context / SQL]--> ledger-db
+
+conversation-routes --[manages conversations / TypeScript]--> conversation-service
+conversation-service --[reads and writes conversations / SQL]--> ledger-db
 ```
 
-## Components — web-spa (skipped: presentation container)
+## Components — agent-runtime
+
+The Agent runtime is a standalone Node.js 22 HTTP server that implements the AWS Bedrock AgentCore contract (`GET /ping`, `POST /invocations`). It retrieves structured market data from OpenSearch Serverless and invokes Bedrock Nova Pro for grounded portfolio analysis.
+
+```
++= agent-runtime : Stock Analysis Agent ============================================+
+|                                                                                    |
+|   +------------------------+  +------------------------+                          |
+|   | http-server            |  | opensearch-client      |                          |
+|   | [component]            |  | [component]            |                          |
+|   | Node.js HTTP (port 8080)| | SigV4 signed requests  |                          |
+|   +------------------------+  +------------------------+                          |
+|                                                                                    |
+|   +------------------------+  +------------------------+                          |
+|   | bedrock-client         |  | prompt-builder         |                          |
+|   | [component]            |  | [component]            |                          |
+|   | AWS SDK ConverseStream |  | system + user prompts  |                          |
+|   +------------------------+  +------------------------+                          |
+|                                                                                    |
++====================================================================================+
+```
+
+```
+ledger-api --[POST /invocations / HTTPS + JSON]--> http-server
+http-server --[queries stock indices / TypeScript]--> opensearch-client
+opensearch-client --[structured queries / SigV4 HTTPS]--> opensearch-serverless
+http-server --[builds prompt context / TypeScript]--> prompt-builder
+http-server --[invokes LLM / TypeScript]--> bedrock-client
+bedrock-client --[ConverseStream / AWS SDK]--> bedrock
+http-server --[streams SSE response / HTTPS]--> ledger-api
+```
+
+## Components — web-spa
+
+The SPA has 5 pages with a tab-bar navigation and an onboarding guard.
+
+| Page | Path | Description |
+|------|------|-------------|
+| OnboardingPage | `/onboarding` | Stock selection and quick entry for initial context |
+| HomePage | `/` | Daily scenario greeting, attention items, action suggestions |
+| PerformancePage | `/performance` | XIRR/TWR charts, holdings, benchmark comparison |
+| AgentPage | `/agent` | AI chat interface with structured card responses |
+| MyDataPage | `/my-data` | View/edit context: principles, memories, behaviors |
 
 ## Components — ledger-db (skipped: managed database)
 
-## Components — ledger-cache (skipped: managed cache)
+## Components — opensearch-serverless
 
-## Components — seed-loader (skipped: one-purpose seed CLI)
+Hosts 8 CMoney-derived stock market indices used by the Agent runtime for structured queries:
 
-## Components — agentcore (skipped: managed AWS service)
+| Index | Content |
+|-------|---------|
+| `stock-summary` | Company overview and fundamentals |
+| `stock-price` | Historical price data |
+| `stock-institutional` | Institutional (法人) trading data |
+| `stock-returns` | Return metrics |
+| `stock-momentum` | Technical momentum indicators |
+| `stock-forum` | Social discussion sentiment |
+| `stock-dividend` | Dividend history |
+| `stock-industry` | Industry classification |
 
-## Components — knowledge-base (skipped: managed AWS service)
+## Data Ingestion
+
+Data ingestion is handled by `apps/agent/scripts/ingest-opensearch.ts` — a Bun script that parses CMoney CSV files and bulk-indexes them into OpenSearch Serverless. It is not a standalone container but a one-time operational script.
+
+```
+ingest-opensearch.ts --[reads CSV files / filesystem]--> cmoney (data/ directory)
+ingest-opensearch.ts --[bulk indexes / SigV4 HTTPS]--> opensearch-serverless
+```
 
 ## Element Registry
 
 | id | kind | parent | label | technology | description |
 | --- | --- | --- | --- | --- | --- |
-| investor | person |  | Investor |  | Single demo user who imports a portfolio and reads factual analysis. |
-| ledger-book | softwaresystem |  | 股票帳本 Ledger Book |  | Quantifies portfolio performance and provides non-advisory historical analysis. |
+| investor | person |  | Investor |  | Single demo user who imports a portfolio, views performance, and chats with AI agent. |
+| ledger-book | softwaresystem |  | 投資搭檔 Ledger Book |  | Quantifies portfolio performance and provides non-advisory AI-powered portfolio insights. |
 | cmoney | existingsystem |  | Authorized CMoney Data |  | Authorized historical price, chip, fundamental, and discussion evidence source. |
-| aws-bedrock | existingsystem |  | AWS Bedrock |  | External managed AI platform. |
-| web-spa | spa | ledger-book | Browser SPA | Vue 3 + Vite | Demo import, dashboard, and time-travel report interface. |
-| ledger-api | container | ledger-book | Ledger Book API | Bun + TypeScript + Elysia | Synchronous REST API and business orchestration. |
-| ledger-db | database | ledger-book | Ledger Book Database | PostgreSQL + Prisma | System of record for append-only ledger, seeds, derived data, report audit data. |
-| ledger-cache | container | ledger-book | Derived Response Cache | Redis | Caches dashboard responses and passed time-travel reports. |
-| seed-loader | container | ledger-book | Demo Data Seed Loader | Bun + TypeScript CLI | Repeatably loads approved demo data and RAG chunks. |
-| agentcore | container | aws-bedrock | Bedrock AgentCore | AWS Bedrock AgentCore | Orchestrates factual, scoped analysis generation. |
-| knowledge-base | container | aws-bedrock | Bedrock Knowledge Base | Amazon Bedrock Knowledge Bases | Holds authorized RAG chunks with security and date metadata. |
-| import-controller | component | ledger-api | Demo Import Controller | Elysia route handler | Starts one hardcoded demo import. |
-| ledger-service | component | ledger-api | Immutable Ledger Service | TypeScript | Appends entries, creates reversals, and invalidates derived dashboard cache. |
-| dashboard-controller | component | ledger-api | Dashboard Controller | Elysia route handler | Serves the selected-date dashboard resource. |
-| performance-service | component | ledger-api | Performance Service | TypeScript + node-irr + @railpath/finance-toolkit | Builds valuations, XIRR, TWR, and benchmark values. |
-| report-controller | component | ledger-api | Time-Travel Report Controller | Elysia route handler | Creates or retrieves a selected-date report. |
-| analysis-service | component | ledger-api | Analysis Service | TypeScript + AWS SDK | Retrieves evidence, invokes AgentCore, persists audit data, and caches passed reports. |
-| compliance-gate | component | ledger-api | Compliance Gate | TypeScript policy | Rejects investment-advice language and records report status. |
+| aws-cloud | existingsystem |  | AWS Cloud Services |  | External managed cloud services (Bedrock, OpenSearch Serverless). |
+| web-spa | spa | ledger-book | Browser SPA | Vue 3 + Vite + Vue Router | Onboarding, home scenario, performance dashboard, AI chat, and context management. |
+| ledger-api | container | ledger-book | Ledger Book API | Bun + TypeScript + Elysia | Synchronous REST API, business orchestration, and agent proxy. |
+| agent-runtime | container | ledger-book | Stock Analysis Agent | Node.js 22 + AWS SDK | AgentCore-compatible runtime: queries OpenSearch, invokes Bedrock Nova Pro, streams analysis. |
+| ledger-db | database | ledger-book | Ledger Book Database | PostgreSQL 16 + Prisma | System of record for append-only ledger, user context, conversations, and report audit data. |
+| contracts | library | ledger-book | Shared Type Contracts | TypeScript | Shared domain types and V1 AI-native contracts between web-spa and ledger-api. |
+| bedrock | existingsystem | aws-cloud | Amazon Bedrock | Nova Pro v1 (ConverseStream) | Foundation model inference for grounded portfolio analysis. |
+| opensearch-serverless | existingsystem | aws-cloud | OpenSearch Serverless | SEARCH type collection | Hosts structured stock market indices for Agent RAG queries. |
+| import-service | component | ledger-api | Import Service | TypeScript | Parses CSV and creates immutable ledger entries via ledger-service. |
+| ledger-service | component | ledger-api | Immutable Ledger Service | TypeScript | Appends entries with sequence numbers; creates reversals. |
+| portfolio-service | component | ledger-api | Portfolio Service | TypeScript + node-irr + @railpath/finance-toolkit | Builds valuations, XIRR, TWR, and benchmark values from ledger data. |
+| time-travel-service | component | ledger-api | Time-Travel Service | TypeScript | Creates date-scoped factual reports from evidence with compliance check. |
+| context-service | component | ledger-api | Context Service | TypeScript | Manages user holdings, principles, memories, inferences, behaviors. |
+| conversation-service | component | ledger-api | Conversation Service | TypeScript | Manages multi-turn AI conversation state and history. |
+| agent-client | component | ledger-api | Agent Client | TypeScript + fetch | HTTP client that invokes agent-runtime and transforms SSE into V1 stream messages. |
+| compliance-check | component | ledger-api | Compliance Check | TypeScript regex | Rejects investment-advice language (buy/sell/hold) in generated summaries. |
 
 ## Relationships
 
 | source | target | label | technology |
 | --- | --- | --- | --- |
-| investor | ledger-book | imports demo ledger, views performance, requests analysis | HTTPS |
+| investor | ledger-book | imports ledger, views performance, chats with AI | HTTPS |
 | ledger-book | cmoney | imports authorized historical evidence | controlled data transfer |
-| ledger-book | aws-bedrock | generates factual reports | AWS SDK + HTTPS |
+| ledger-book | aws-cloud | queries market data + generates analysis | SigV4 HTTPS + AWS SDK |
 | investor | web-spa | uses | HTTPS |
-| web-spa | ledger-api | calls portfolio APIs | HTTPS + JSON |
-| ledger-api | ledger-db | reads and writes | SQL |
-| ledger-api | ledger-cache | reads and writes derived responses | Redis protocol |
-| ledger-api | agentcore | invokes grounded analysis | AWS SDK + HTTPS |
-| seed-loader | cmoney | imports authorized evidence | controlled data transfer |
-| seed-loader | ledger-db | seeds prices, evidence, and demo data | SQL |
-| seed-loader | knowledge-base | indexes RAG chunks | AWS SDK + HTTPS |
-| agentcore | knowledge-base | retrieves scoped evidence | Bedrock internal API |
-| web-spa | import-controller | starts import | HTTPS + JSON |
-| web-spa | dashboard-controller | loads dashboard | HTTPS + JSON |
-| web-spa | report-controller | requests report | HTTPS + JSON |
-| import-controller | ledger-service | imports immutable entries | TypeScript |
-| ledger-service | ledger-db | appends ledger | SQL |
-| ledger-service | ledger-cache | invalidates dashboard cache | Redis protocol |
-| dashboard-controller | performance-service | loads dashboard | TypeScript |
-| performance-service | ledger-db | reads snapshots, prices, and ledger | SQL |
-| performance-service | ledger-cache | gets or stores dashboard | Redis protocol |
-| report-controller | analysis-service | creates or reads report | TypeScript |
-| analysis-service | ledger-db | retrieves evidence and stores report audit data | SQL |
-| analysis-service | agentcore | invokes factual synthesis | AWS SDK + HTTPS |
-| analysis-service | compliance-gate | checks generated report | TypeScript |
-| analysis-service | ledger-cache | caches passed report | Redis protocol |
-| compliance-gate | ledger-db | records compliance status | SQL |
+| web-spa | ledger-api | calls APIs | HTTPS + JSON |
+| ledger-api | ledger-db | reads and writes | SQL (Prisma) |
+| ledger-api | agent-runtime | invokes analysis | HTTPS + SSE |
+| agent-runtime | opensearch-serverless | queries structured market data | SigV4 HTTPS |
+| agent-runtime | bedrock | generates grounded analysis | AWS SDK ConverseStream |
+| contracts | web-spa | shared types | TypeScript import |
+| contracts | ledger-api | shared types | TypeScript import |
+| web-spa | import-routes | starts import | HTTPS + JSON |
+| web-spa | portfolio-routes | loads portfolio and dashboard | HTTPS + JSON |
+| web-spa | time-travel-routes | requests time-travel report | HTTPS + JSON |
+| web-spa | onboarding-routes | onboarding flow | HTTPS + JSON |
+| web-spa | home-routes | loads scenario | HTTPS + JSON |
+| web-spa | context-routes | manages user context | HTTPS + JSON |
+| web-spa | performance-routes | loads performance data | HTTPS + JSON |
+| web-spa | agent-chat-routes | AI chat | HTTPS + SSE |
+| web-spa | conversation-routes | conversation history | HTTPS + JSON |
+| import-service | ledger-service | appends entries | TypeScript |
+| ledger-service | ledger-db | appends immutable ledger | SQL |
+| portfolio-service | ledger-db | reads snapshots, prices, ledger | SQL |
+| time-travel-service | ledger-db | reads evidence, writes report | SQL |
+| time-travel-service | compliance-check | validates summary | TypeScript |
+| context-service | ledger-db | reads and writes user context | SQL |
+| conversation-service | ledger-db | reads and writes conversations | SQL |
+| agent-client | agent-runtime | streams analysis | HTTPS + SSE |
+
+## Deployment (AWS `us-east-1`)
+
+| Resource | Service | Notes |
+|----------|---------|-------|
+| Web SPA | CloudFront → S3 | Static site distribution |
+| API | CloudFront → ALB → ECS Fargate | Bun container, VPC with private subnets |
+| Database | RDS PostgreSQL (Aurora-compatible) | Private subnet, Prisma migrations |
+| Agent Runtime | AWS Bedrock AgentCore | Code in S3, NODE_22 runtime |
+| Search | OpenSearch Serverless (SEARCH) | 8 stock market indices |
+| Agent Code | S3 | deployment_package.zip |
