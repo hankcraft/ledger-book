@@ -17,8 +17,8 @@ export interface CreateApiServiceOptions {
 /**
  * Creates the single frontend API boundary.
  *
- * Mock mode is the safe default until the versioned backend endpoints are
- * implemented. Set VITE_API_MODE=real only when client.ts has a working adapter.
+ * Mock mode is the safe default for local development.
+ * Production builds set VITE_API_MODE=real via the deploy script.
  */
 export function createApiService(options: CreateApiServiceOptions = {}): IApiService {
   const mode = options.mode ?? resolveApiMode(import.meta.env.VITE_API_MODE);
