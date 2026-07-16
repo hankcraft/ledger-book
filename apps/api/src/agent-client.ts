@@ -1,14 +1,41 @@
 /**
- * Agent Client — calls the Agent runtime (OpenSearch + Bedrock)
+ * Agent Client — calls the AgentCore Runtime (OpenSearch + Bedrock)
  *
- * The Agent at AGENT_ENDPOINT handles:
- *   1. Extracting stock codes from the prompt
- *   2. Querying OpenSearch for structured market data
- *   3. Invoking Bedrock Nova Pro with the data context
- *   4. Streaming the response as SSE (data: "chunk"\n\n ... data: [DONE])
+ * Uses the AWS SDK @aws-sdk/client-bedrock-agentcore to invoke the agent.
+ * The SDK handles SigV4 signing and endpoint URL construction automatically.
+ *
+ * Environment variables:
+ *   AGENT_RUNTIME_ARN       — AgentCore runtime ARN (production)
+ *   AGENT_ENDPOINT_QUALIFIER — Endpoint name / qualifier (production)
+ *   AGENT_ENDPOINT          — Direct HTTP URL for local dev (e.g. http://localhost:8080)
+ *   AWS_REGION              — AWS region (default: us-east-1)
  */
 
-const AGENT_ENDPOINT = Bun.env.AGENT_ENDPOINT ?? "http://localhost:8080";
+import {
+  BedrockAgentCoreClient,
+  InvokeAgentRuntimeCommand,
+} from "@aws-sdk/client-bedrock-agentcore";
+
+// ─── Configuration ──────────────────────────────────────────────────────────
+
+const AGENT_RUNTIME_ARN = Bun.env.AGENT_RUNTIME_ARN ?? "";
+const AGENT_ENDPOINT_QUALIFIER = Bun.env.AGENT_ENDPOINT_QUALIFIER ?? "";
+const AGENT_ENDPOINT = Bun.env.AGENT_ENDPOINT ?? "";
+const REGION = Bun.env.AWS_REGION ?? "us-east-1";
+
+/** True when running against real AgentCore (has ARN configured) */
+const useAgentCoreSDK = AGENT_RUNTIME_ARN.length > 0;
+
+// Lazy-init SDK client (only when needed)
+let _client: BedrockAgentCoreClient | null = null;
+function getClient(): BedrockAgentCoreClient {
+  if (!_client) {
+    _client = new BedrockAgentCoreClient({ region: REGION });
+  }
+  return _client;
+}
+
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface AgentInvokeOptions {
   prompt: string;
@@ -16,20 +43,47 @@ export interface AgentInvokeOptions {
   timeout?: number;
 }
 
-/**
- * Invoke the Agent and collect the full response as a string.
- */
-export async function invokeAgent(options: AgentInvokeOptions): Promise<string> {
-  const { prompt, portfolioContext, timeout = 30_000 } = options;
-  const fullPrompt = portfolioContext
-    ? `${portfolioContext}\n\n---\n\n用戶提問：${prompt}`
-    : prompt;
+// ─── Private: invoke via SDK ────────────────────────────────────────────────
 
+async function invokeViaSDK(fullPrompt: string, timeout: number): Promise<string> {
+  const client = getClient();
+  const payload = new TextEncoder().encode(JSON.stringify({ prompt: fullPrompt }));
+
+  const command = new InvokeAgentRuntimeCommand({
+    agentRuntimeArn: AGENT_RUNTIME_ARN,
+    payload,
+    contentType: "application/json",
+    accept: "text/event-stream",
+    ...(AGENT_ENDPOINT_QUALIFIER ? { qualifier: AGENT_ENDPOINT_QUALIFIER } : {}),
+  });
+
+  const response = await Promise.race([
+    client.send(command),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Agent SDK timeout")), timeout),
+    ),
+  ]);
+
+  // The response body is a SdkStream — use transformToWebStream() to get a ReadableStream
+  const body = response.response;
+  if (!body) throw new Error("Agent returned no response body");
+
+  // SdkStreamMixin provides transformToWebStream()
+  const webStream = (
+    body as { transformToWebStream(): ReadableStream<Uint8Array> }
+  ).transformToWebStream();
+  return collectSSEResponse(webStream);
+}
+
+// ─── Private: invoke via direct HTTP (local dev) ────────────────────────────
+
+async function invokeViaHTTP(fullPrompt: string, timeout: number): Promise<string> {
+  const endpoint = AGENT_ENDPOINT || "http://localhost:8080";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const res = await fetch(`${AGENT_ENDPOINT}/invocations`, {
+    const res = await fetch(`${endpoint}/invocations`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: fullPrompt }),
@@ -42,37 +96,77 @@ export async function invokeAgent(options: AgentInvokeOptions): Promise<string> 
     }
 
     if (!res.body) throw new Error("Agent returned no body");
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let result = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const payload = line.slice(6);
-        if (payload === "[DONE]") break;
-        try {
-          const chunk: unknown = JSON.parse(payload);
-          if (typeof chunk === "string") result += chunk;
-        } catch {
-          // skip malformed
-        }
-      }
-    }
-
-    return result || "無法生成回應。";
+    return collectSSEResponse(res.body);
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ─── Private: parse SSE stream ──────────────────────────────────────────────
+
+async function collectSSEResponse(
+  body: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>,
+): Promise<string> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result = "";
+
+  const iterable =
+    Symbol.asyncIterator in body
+      ? (body as AsyncIterable<Uint8Array>)
+      : readableStreamToAsyncIterable(body as ReadableStream<Uint8Array>);
+
+  for await (const chunk of iterable) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6);
+      if (payload === "[DONE]") break;
+      try {
+        const parsed: unknown = JSON.parse(payload);
+        if (typeof parsed === "string") result += parsed;
+      } catch {
+        // skip malformed SSE chunks
+      }
+    }
+  }
+
+  return result || "無法生成回應。";
+}
+
+async function* readableStreamToAsyncIterable(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<Uint8Array> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) yield value;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+/**
+ * Invoke the Agent and collect the full response as a string.
+ */
+export async function invokeAgent(options: AgentInvokeOptions): Promise<string> {
+  const { prompt, portfolioContext, timeout = 30_000 } = options;
+  const fullPrompt = portfolioContext
+    ? `${portfolioContext}\n\n---\n\n用戶提問：${prompt}`
+    : prompt;
+
+  if (useAgentCoreSDK) {
+    return invokeViaSDK(fullPrompt, timeout);
+  }
+  return invokeViaHTTP(fullPrompt, timeout);
 }
 
 /**
@@ -82,7 +176,7 @@ export async function invokeAgent(options: AgentInvokeOptions): Promise<string> 
 export async function streamAgentAsV1Messages(
   options: AgentInvokeOptions,
   turnId: string,
-  context?: {
+  _context?: {
     holdings?: Array<{ name: string; weight: number; cost: number; plPercent: number }>;
     memories?: Array<{ quote: string; date: string; archived: boolean }>;
   },
@@ -92,84 +186,34 @@ export async function streamAgentAsV1Messages(
     ? `${portfolioContext}\n\n---\n\n用戶提問：${prompt}`
     : prompt;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  // Collect the full agent response first
+  const agentText = useAgentCoreSDK
+    ? await invokeViaSDK(fullPrompt, timeout)
+    : await invokeViaHTTP(fullPrompt, timeout);
 
-  try {
-    const res = await fetch(`${AGENT_ENDPOINT}/invocations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: fullPrompt }),
-      signal: controller.signal,
-    });
+  const messages = buildStructuredMessages(turnId, agentText, prompt);
+  const encoder = new TextEncoder();
 
-    if (!res.ok) {
-      clearTimeout(timer);
-      const text = await res.text().catch(() => "");
-      throw new Error(`Agent returned ${res.status}: ${text.slice(0, 200)}`);
-    }
+  const stream = new ReadableStream({
+    async start(ctrl) {
+      for (const msg of messages) {
+        ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(msg)}\n\n`));
+      }
+      ctrl.enqueue(encoder.encode("data: [DONE]\n\n"));
+      ctrl.close();
+    },
+  });
 
-    if (!res.body) {
-      clearTimeout(timer);
-      throw new Error("Agent returned no body");
-    }
-
-    const agentBody = res.body;
-    const encoder = new TextEncoder();
-
-    const stream = new ReadableStream({
-      async start(ctrl) {
-        const reader = agentBody.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let accumulated = "";
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              const payload = line.slice(6);
-              if (payload === "[DONE]") break;
-              try {
-                const chunk: unknown = JSON.parse(payload);
-                if (typeof chunk === "string") accumulated += chunk;
-              } catch {
-                // skip
-              }
-            }
-          }
-        } finally {
-          clearTimeout(timer);
-        }
-
-        const messages = buildStructuredMessages(turnId, accumulated, prompt, context);
-        for (const msg of messages) {
-          ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(msg)}\n\n`));
-        }
-        ctrl.enqueue(encoder.encode("data: [DONE]\n\n"));
-        ctrl.close();
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    throw err;
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }
+
+// ─── Private: structured messages ───────────────────────────────────────────
 
 interface StreamMessage {
   id: string;
@@ -178,26 +222,16 @@ interface StreamMessage {
   card?: Record<string, unknown>;
 }
 
-/**
- * Transform Agent text response into structured messages.
- * Only includes the agent's actual text reply and a follow-up question.
- */
 function buildStructuredMessages(
   turnId: string,
   agentText: string,
   _userPrompt: string,
-  _context?: {
-    holdings?: Array<{ name: string; weight: number; cost: number; plPercent: number }>;
-    memories?: Array<{ quote: string; date: string; archived: boolean }>;
-  },
 ): StreamMessage[] {
   const messages: StreamMessage[] = [];
   const text = agentText || "無法生成回應。";
 
-  // Main text response from Agent
   messages.push({ id: `${turnId}-text`, role: "agent", text });
 
-  // Follow-up question for next steps
   messages.push({
     id: `${turnId}-question`,
     role: "agent",
@@ -210,6 +244,8 @@ function buildStructuredMessages(
 
   return messages;
 }
+
+// ─── Public: portfolio context builder ──────────────────────────────────────
 
 /**
  * Build a portfolio context string from the user's holdings.
@@ -264,8 +300,14 @@ export function buildPortfolioContext(
  * Check if the Agent endpoint is available.
  */
 export async function isAgentAvailable(): Promise<boolean> {
+  if (useAgentCoreSDK) {
+    // For SDK mode, assume available (health check would require a lightweight invoke)
+    return true;
+  }
+
   try {
-    const res = await fetch(`${AGENT_ENDPOINT}/ping`, { signal: AbortSignal.timeout(2000) });
+    const endpoint = AGENT_ENDPOINT || "http://localhost:8080";
+    const res = await fetch(`${endpoint}/ping`, { signal: AbortSignal.timeout(2000) });
     return res.ok;
   } catch {
     return false;
