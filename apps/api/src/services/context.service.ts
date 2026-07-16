@@ -126,8 +126,9 @@ const DEFAULT_PORTFOLIO_ID = "demo-portfolio";
 const BENCHMARK_SYMBOL = "0050";
 
 /**
- * Seeds portfolio-level data (securities, ledger entries, market prices)
- * from a template so the performance page has data to render.
+ * Seeds portfolio-level data (securities, ledger entries, market prices,
+ * importBatch, and analysisEvidence) from a template so that the
+ * performance page, time-travel, and v1 APIs all have data to render.
  */
 async function seedPortfolioFromTemplate(
   db: PrismaClient,
@@ -149,18 +150,30 @@ async function seedPortfolioFromTemplate(
     },
   });
 
-  // Clear existing ledger entries and market prices for a clean slate
+  // ── Clean slate: remove old time-travel reports, evidence, ledger, and imports ──
+  // Delete report→evidence links first (FK constraint)
+  const existingReports = await db.timeTravelReport.findMany({
+    where: { portfolioId },
+    select: { id: true },
+  });
+  if (existingReports.length > 0) {
+    await db.timeTravelReportEvidence.deleteMany({
+      where: { reportId: { in: existingReports.map((r) => r.id) } },
+    });
+    await db.timeTravelReport.deleteMany({ where: { portfolioId } });
+  }
   await db.ledgerEntry.deleteMany({ where: { portfolioId } });
+  await db.importBatch.deleteMany({ where: { portfolioId } });
 
-  // Upsert securities and collect IDs
+  // Upsert securities using the template's symbol (stock code)
   const holdingSecurities: Array<{ securityId: string; holding: (typeof template.holdings)[0] }> =
     [];
   for (const h of template.holdings) {
     const security = await db.security.upsert({
-      where: { market_symbol: { market: "TWSE", symbol: h.name } },
-      update: {},
+      where: { market_symbol: { market: "TWSE", symbol: h.symbol } },
+      update: { name: h.name },
       create: {
-        symbol: h.name,
+        symbol: h.symbol,
         market: "TWSE",
         name: h.name,
         assetType: "stock",
@@ -196,6 +209,17 @@ async function seedPortfolioFromTemplate(
     0,
   );
 
+  // ── Seed importBatch so time-travel's hasImported check passes ──
+  await db.importBatch.create({
+    data: {
+      portfolioId,
+      sourcePayload: { type: "template", templateId: template.id },
+      status: "completed",
+      startedAt: new Date(),
+      completedAt: new Date(),
+    },
+  });
+
   // Create ledger entries: one cash deposit + one buy per holding
   let sequence = 1;
 
@@ -228,49 +252,100 @@ async function seedPortfolioFromTemplate(
     });
   }
 
-  // Seed market prices: purchase-date price + today's price for each security
-  // Generate intermediate weekly prices for a smoother chart
+  // Build a unified set of all timeline dates (weekly from each holding's purchase).
+  // Every security (including benchmark) will have a price at every relevant date
+  // so that priceOnOrBefore always finds an exact match and avoids stale-price jumps.
+  const allTimelineDates = new Set<string>();
+  for (const { holding } of holdingSecurities) {
+    for (const d of generateWeeklyDates(holding.purchaseDate, today)) {
+      allTimelineDates.add(d);
+    }
+  }
+  const sortedTimelineDates = [...allTimelineDates].toSorted();
+
+  // Total days for time-based interpolation
+  const totalDays = Math.max(
+    1,
+    (new Date(today).getTime() - new Date(earliestDate).getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  // Seed market prices for each holding at ALL timeline dates from its purchase onward
   for (const { securityId, holding } of holdingSecurities) {
     const currentPrice = holding.cost * (1 + holding.plPercent / 100);
-    const dates = generateWeeklyDates(holding.purchaseDate, today);
+    const purchaseTime = new Date(holding.purchaseDate).getTime();
+    const holdingTotalDays = Math.max(
+      1,
+      (new Date(today).getTime() - purchaseTime) / (1000 * 60 * 60 * 24),
+    );
 
-    const priceData = dates.map((date, i) => {
-      // Linear interpolation from cost → currentPrice
-      const progress = dates.length > 1 ? i / (dates.length - 1) : 1;
+    // Only seed dates on or after this holding's purchase date
+    const holdingDates = sortedTimelineDates.filter((d) => new Date(d).getTime() >= purchaseTime);
+
+    for (const date of holdingDates) {
+      const daysSincePurchase = (new Date(date).getTime() - purchaseTime) / (1000 * 60 * 60 * 24);
+      const progress = daysSincePurchase / holdingTotalDays;
       const price = holding.cost + (currentPrice - holding.cost) * progress;
-      return {
-        securityId,
-        tradedOn: date,
-        closePrice: Math.round(price * 100) / 100,
-        source: "template",
-      };
-    });
-
-    for (const p of priceData) {
       await db.marketPrice.upsert({
-        where: { securityId_tradedOn: { securityId: p.securityId, tradedOn: p.tradedOn } },
-        update: { closePrice: p.closePrice },
-        create: p,
+        where: { securityId_tradedOn: { securityId, tradedOn: date } },
+        update: { closePrice: Math.round(price * 100) / 100 },
+        create: {
+          securityId,
+          tradedOn: date,
+          closePrice: Math.round(price * 100) / 100,
+          source: "template",
+        },
       });
     }
   }
 
-  // Benchmark prices: simulate ~5% return over the same period
-  const benchmarkDates = generateWeeklyDates(earliestDate, today);
+  // Benchmark prices: simulate ~5% return over the same period.
+  // Seed at every unified timeline date so priceOnOrBefore always has an exact match.
   const benchmarkBasePrice = 150; // approximate 0050 price
-  for (let i = 0; i < benchmarkDates.length; i++) {
-    const progress = benchmarkDates.length > 1 ? i / (benchmarkDates.length - 1) : 1;
+  for (const date of sortedTimelineDates) {
+    const daysSinceStart =
+      (new Date(date).getTime() - new Date(earliestDate).getTime()) / (1000 * 60 * 60 * 24);
+    const progress = daysSinceStart / totalDays;
     const price = benchmarkBasePrice * (1 + 0.05 * progress);
     await db.marketPrice.upsert({
-      where: { securityId_tradedOn: { securityId: benchmark.id, tradedOn: benchmarkDates[i]! } },
+      where: { securityId_tradedOn: { securityId: benchmark.id, tradedOn: date } },
       update: { closePrice: Math.round(price * 100) / 100 },
       create: {
         securityId: benchmark.id,
-        tradedOn: benchmarkDates[i]!,
+        tradedOn: date,
         closePrice: Math.round(price * 100) / 100,
         source: "template",
       },
     });
+  }
+
+  // ── Seed analysisEvidence so time-travel createReport can find data ──
+  // For each security, create evidence records at multiple dates within the timeline.
+  for (const { securityId, holding } of holdingSecurities) {
+    // Remove old evidence for this security (from previous template applications)
+    await db.analysisEvidence.deleteMany({ where: { securityId, sourceName: "template-seed" } });
+
+    // Generate evidence at purchase date and ~monthly intervals until today
+    const evidenceDates = generateMonthlyDates(holding.purchaseDate, today);
+    for (const date of evidenceDates) {
+      await db.analysisEvidence.create({
+        data: {
+          securityId,
+          evidenceType: "institutional_chip",
+          observedOn: date,
+          sourceName: "template-seed",
+          payload: { label: `${holding.name} 法人買賣超資料（${date}）` },
+        },
+      });
+      await db.analysisEvidence.create({
+        data: {
+          securityId,
+          evidenceType: "forum_sentiment",
+          observedOn: date,
+          sourceName: "template-seed",
+          payload: { label: `${holding.name} 社群討論情緒摘要（${date}）` },
+        },
+      });
+    }
   }
 
   // Link V1Holdings to their securities via securityId
@@ -291,6 +366,26 @@ function generateWeeklyDates(start: string, end: string): string[] {
   while (current <= endDate) {
     dates.push(current.toISOString().slice(0, 10));
     current.setDate(current.getDate() + 7);
+  }
+
+  // Always include the end date
+  const lastDate = dates.at(-1);
+  if (lastDate !== end && new Date(end) > new Date(lastDate!)) {
+    dates.push(end);
+  }
+
+  return dates;
+}
+
+/** Generate monthly date strings between start and end (inclusive of both). */
+function generateMonthlyDates(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const current = new Date(start);
+  const endDate = new Date(end);
+
+  while (current <= endDate) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setMonth(current.getMonth() + 1);
   }
 
   // Always include the end date

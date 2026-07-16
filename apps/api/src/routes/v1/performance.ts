@@ -90,13 +90,35 @@ export function createPerformanceRoutes(
           }
         }
 
-        const points = dashboard.timelinePoints.map((p) => ({
-          date: p.date,
-          portfolioReturn: Math.round((p.marketValue / first.marketValue - 1) * 100 * 100) / 100,
-          benchmarkReturn:
-            benchmarkPoints?.get(p.date) ??
-            Math.round((p.benchmarkValue / first.benchmarkValue - 1) * 100 * 100) / 100,
-        }));
+        const points = dashboard.timelinePoints.map((p) => {
+          const portfolioReturn =
+            Math.round((p.marketValue / first.marketValue - 1) * 100 * 100) / 100;
+
+          let benchReturn: number;
+          if (benchmarkPoints && benchmarkPoints.size > 0) {
+            // OpenSearch available: use exact match or nearest earlier date
+            const exact = benchmarkPoints.get(p.date);
+            if (exact !== undefined) {
+              benchReturn = exact;
+            } else {
+              // Find the nearest earlier date in the sorted OpenSearch keys
+              let nearest: number | undefined;
+              for (const [d, v] of benchmarkPoints) {
+                if (d <= p.date) nearest = v;
+                else break;
+              }
+              benchReturn =
+                nearest ??
+                Math.round((p.benchmarkValue / first.benchmarkValue - 1) * 100 * 100) / 100;
+            }
+          } else {
+            // No OpenSearch: use DB-seeded benchmark value (smooth linear)
+            benchReturn =
+              Math.round((p.benchmarkValue / first.benchmarkValue - 1) * 100 * 100) / 100;
+          }
+
+          return { date: p.date, portfolioReturn, benchmarkReturn: benchReturn };
+        });
 
         // Calculate overall benchmark return from OpenSearch if available
         let benchmarkReturn = dashboard.metrics.benchmarkReturn

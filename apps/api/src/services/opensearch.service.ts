@@ -209,7 +209,9 @@ export function createOpenSearchService(): OpenSearchService {
     async getBenchmarkPrices(fromDate: string, toDate: string): Promise<BenchmarkPricePoint[]> {
       const from = fromDate.replace(/-/g, "");
       const to = toDate.replace(/-/g, "");
-      const result = await osQuery("/stock-price/_search", {
+      // Use stock-returns index for 還原收盤價 (dividend-adjusted close price).
+      // The stock-price index has unadjusted 收盤價 which drops on ex-dividend dates.
+      const result = await osQuery("/stock-returns/_search", {
         query: {
           bool: {
             filter: [{ term: { 股票代號: "0050" } }, { range: { 日期: { gte: from, lte: to } } }],
@@ -224,8 +226,8 @@ export function createOpenSearchService(): OpenSearchService {
         const formattedDate = `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`;
         return {
           date: formattedDate,
-          closePrice: Number(doc["收盤價"] ?? 0),
-          changePercent: Number(doc["漲幅(%)"] ?? 0),
+          closePrice: Number(doc["還原收盤價"] ?? doc["收盤價"] ?? 0),
+          changePercent: Number(doc["日報酬率(%)"] ?? doc["漲幅(%)"] ?? 0),
         };
       });
     },
