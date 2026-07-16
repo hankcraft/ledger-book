@@ -65,6 +65,8 @@ jobs:
 
       - name: Build
         run: bun run build
+        env:
+          VITE_API_MODE: real
 
       - name: Detect changes
         id: changes
