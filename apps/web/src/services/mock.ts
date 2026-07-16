@@ -18,7 +18,7 @@ import type {
   PerformanceTimeline,
   TimePointEvent,
 } from "./types";
-import type { Holding, Principle, Behavior, DisplayMessage } from "../types";
+import type { Holding, Principle, Behavior, DisplayMessage, ContextSummaryData } from "../types";
 import {
   seedHoldings,
   seedPrinciples,
@@ -326,6 +326,21 @@ class MockAgentService implements IAgentService {
 
     if (!conversation.hasInitialResponse) {
       conversation.hasInitialResponse = true;
+
+      // Emit context-summary card as the very first message
+      const contextCard: ContextSummaryData = {
+        type: "context-summary",
+        portfolio: { totalStocks: 4, topHolding: "台積電", topWeight: 40 },
+        marketSnapshot: "大盤今日 -1.5%，電子類股偏弱",
+        userProfile: "偏好長期持有、科技股為主",
+      };
+      await delay(100);
+      yield {
+        id: `mock-context-${Date.now()}`,
+        role: "agent",
+        card: contextCard,
+      };
+
       yield* streamMockConversation();
       return;
     }
