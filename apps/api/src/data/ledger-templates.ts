@@ -8,6 +8,8 @@
 
 export interface TemplateHolding {
   name: string;
+  /** TWSE stock code (e.g. "2330" for 台積電) */
+  symbol: string;
   weight: number;
   cost: number;
   plPercent: number;
@@ -54,11 +56,46 @@ export const ledgerTemplates: LedgerTemplate[] = [
     id: "conservative",
     name: "穩健存股型",
     holdings: [
-      { name: "中華電", weight: 30, cost: 122, plPercent: 5, purchaseDate: "2025-02-15" },
-      { name: "台泥", weight: 20, cost: 36, plPercent: -2, purchaseDate: "2025-05-03" },
-      { name: "兆豐金", weight: 25, cost: 42, plPercent: 8, purchaseDate: "2025-01-20" },
-      { name: "統一", weight: 15, cost: 72, plPercent: 3, purchaseDate: "2025-07-10" },
-      { name: "中鋼", weight: 10, cost: 25, plPercent: -1, purchaseDate: "2025-09-05" },
+      {
+        name: "中華電",
+        symbol: "2412",
+        weight: 30,
+        cost: 122,
+        plPercent: 5,
+        purchaseDate: "2025-02-15",
+      },
+      {
+        name: "台泥",
+        symbol: "1101",
+        weight: 20,
+        cost: 36,
+        plPercent: -2,
+        purchaseDate: "2025-05-03",
+      },
+      {
+        name: "兆豐金",
+        symbol: "2886",
+        weight: 25,
+        cost: 42,
+        plPercent: 8,
+        purchaseDate: "2025-01-20",
+      },
+      {
+        name: "統一",
+        symbol: "1216",
+        weight: 15,
+        cost: 72,
+        plPercent: 3,
+        purchaseDate: "2025-07-10",
+      },
+      {
+        name: "中鋼",
+        symbol: "2002",
+        weight: 10,
+        cost: 25,
+        plPercent: -1,
+        purchaseDate: "2025-09-05",
+      },
     ],
     principles: [
       {
@@ -115,10 +152,38 @@ export const ledgerTemplates: LedgerTemplate[] = [
     id: "tech-growth",
     name: "科技成長型",
     holdings: [
-      { name: "台積電", weight: 45, cost: 980, plPercent: 15, purchaseDate: "2025-03-12" },
-      { name: "聯發科", weight: 25, cost: 1280, plPercent: -8, purchaseDate: "2025-05-20" },
-      { name: "廣達", weight: 20, cost: 285, plPercent: 22, purchaseDate: "2025-02-08" },
-      { name: "緯創", weight: 10, cost: 118, plPercent: -3, purchaseDate: "2025-06-01" },
+      {
+        name: "台積電",
+        symbol: "2330",
+        weight: 45,
+        cost: 980,
+        plPercent: 15,
+        purchaseDate: "2025-03-12",
+      },
+      {
+        name: "聯發科",
+        symbol: "2454",
+        weight: 25,
+        cost: 1280,
+        plPercent: -8,
+        purchaseDate: "2025-05-20",
+      },
+      {
+        name: "廣達",
+        symbol: "2382",
+        weight: 20,
+        cost: 285,
+        plPercent: 22,
+        purchaseDate: "2025-02-08",
+      },
+      {
+        name: "緯創",
+        symbol: "3231",
+        weight: 10,
+        cost: 118,
+        plPercent: -3,
+        purchaseDate: "2025-06-01",
+      },
     ],
     principles: [
       {
@@ -184,11 +249,46 @@ export const ledgerTemplates: LedgerTemplate[] = [
     id: "swing-trader",
     name: "波段操作型",
     holdings: [
-      { name: "長榮", weight: 25, cost: 195, plPercent: -6, purchaseDate: "2025-11-25" },
-      { name: "陽明", weight: 20, cost: 68, plPercent: 4, purchaseDate: "2025-12-01" },
-      { name: "華航", weight: 15, cost: 22, plPercent: 10, purchaseDate: "2025-11-18" },
-      { name: "聯電", weight: 20, cost: 52, plPercent: -2, purchaseDate: "2025-12-03" },
-      { name: "國巨", weight: 20, cost: 520, plPercent: 7, purchaseDate: "2025-11-30" },
+      {
+        name: "長榮",
+        symbol: "2603",
+        weight: 25,
+        cost: 195,
+        plPercent: -6,
+        purchaseDate: "2025-11-25",
+      },
+      {
+        name: "陽明",
+        symbol: "2609",
+        weight: 20,
+        cost: 68,
+        plPercent: 4,
+        purchaseDate: "2025-12-01",
+      },
+      {
+        name: "華航",
+        symbol: "2610",
+        weight: 15,
+        cost: 22,
+        plPercent: 10,
+        purchaseDate: "2025-11-18",
+      },
+      {
+        name: "聯電",
+        symbol: "2303",
+        weight: 20,
+        cost: 52,
+        plPercent: -2,
+        purchaseDate: "2025-12-03",
+      },
+      {
+        name: "國巨",
+        symbol: "2327",
+        weight: 20,
+        cost: 520,
+        plPercent: 7,
+        purchaseDate: "2025-11-30",
+      },
     ],
     principles: [
       {
